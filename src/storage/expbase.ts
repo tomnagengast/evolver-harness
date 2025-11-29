@@ -5,8 +5,8 @@
  * using better-sqlite3 for synchronous SQLite operations.
  */
 
+import { randomUUID } from "node:crypto";
 import Database from "better-sqlite3";
-import { randomUUID } from "crypto";
 import {
   calculatePrincipleScore,
   type ExperienceBaseStats,
@@ -16,7 +16,6 @@ import {
   type PrincipleScore,
   type SearchQuery,
   type Trace,
-  Triple,
 } from "../types";
 
 /**
@@ -694,10 +693,7 @@ export class ExpBaseStorage {
   /**
    * Prune principles with scores below the threshold
    */
-  pruneLowScorePrinciples(
-    threshold: number,
-    minUsageCount: number = 10,
-  ): string[] {
+  pruneLowScorePrinciples(threshold: number, minUsageCount = 10): string[] {
     try {
       const principles = this.getAllPrinciples();
       const prunedIds: string[] = [];

@@ -129,7 +129,7 @@ export function cosineSimilarity(vecA: number[], vecB: number[]): number {
 export function findSimilarPrinciples(
   targetEmbedding: number[],
   allPrinciples: Principle[],
-  threshold: number = 0.85,
+  threshold = 0.85,
 ): Array<{ principle: Principle; similarity: number }> {
   const results: Array<{ principle: Principle; similarity: number }> = [];
 
@@ -164,7 +164,7 @@ export function findSimilarPrinciples(
 export async function generateEmbeddings(
   texts: string[],
   config: EmbeddingConfig = {},
-  delayMs: number = 0,
+  delayMs = 0,
 ): Promise<number[][]> {
   const embeddings: number[][] = [];
 

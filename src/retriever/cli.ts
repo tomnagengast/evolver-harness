@@ -7,14 +7,13 @@
  * in the experience base.
  */
 
-import { parseArgs } from 'util';
-import { ExperienceRetriever } from './retriever';
-import { PrincipleInjector } from './injector';
-import { SearchQuery } from '../types';
-import { existsSync } from 'fs';
-import { resolve } from 'path';
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import type { SearchQuery } from "../types";
+import { PrincipleInjector } from "./injector";
+import { ExperienceRetriever } from "./retriever";
 
-const DEFAULT_DB_PATH = resolve(process.cwd(), 'expbase.db');
+const DEFAULT_DB_PATH = resolve(process.cwd(), "expbase.db");
 
 /**
  * Print usage information
@@ -102,8 +101,8 @@ function parseArguments(): {
   const options: Record<string, string | boolean | undefined> = {};
   for (let i = 1; i < args.length; i++) {
     const arg = args[i];
-    if (arg.startsWith('--')) {
-      const [key, value] = arg.substring(2).split('=');
+    if (arg.startsWith("--")) {
+      const [key, value] = arg.substring(2).split("=");
       if (value === undefined) {
         // Flag without value (e.g., --verbose)
         options[key] = true;
@@ -119,7 +118,9 @@ function parseArguments(): {
 /**
  * Execute search command
  */
-async function searchCommand(options: Record<string, string | boolean | undefined>): Promise<void> {
+async function searchCommand(
+  options: Record<string, string | boolean | undefined>,
+): Promise<void> {
   const dbPath = (options.db as string) || DEFAULT_DB_PATH;
 
   if (!existsSync(dbPath)) {
@@ -135,7 +136,7 @@ async function searchCommand(options: Record<string, string | boolean | undefine
   try {
     // Build search query
     const query: SearchQuery = {
-      limit: options.top ? Number.parseInt(options.top as string) : 5,
+      limit: options.top ? Number.parseInt(options.top as string, 10) : 5,
     };
 
     if (options.query) {
@@ -143,31 +144,39 @@ async function searchCommand(options: Record<string, string | boolean | undefine
     }
 
     if (options.tags) {
-      query.tags = (options.tags as string).split(',').map((t) => t.trim());
+      query.tags = (options.tags as string).split(",").map((t) => t.trim());
     }
 
     // Execute search
     const response = await retriever.searchExperience(query);
 
     // Display results
-    console.log(`\nFound ${response.total_count} matching principles (showing top ${response.results.length}):`);
+    console.log(
+      `\nFound ${response.total_count} matching principles (showing top ${response.results.length}):`,
+    );
     console.log(`Query time: ${response.query_time_ms}ms\n`);
 
     for (let i = 0; i < response.results.length; i++) {
       const result = response.results[i];
-      if (result.type === 'principle') {
+      if (result.type === "principle") {
         const principle = result.item;
-        console.log(`${i + 1}. [${principle.id.substring(0, 8)}...] ${principle.text}`);
-        console.log(`   Tags: ${principle.tags.join(', ')}`);
+        console.log(
+          `${i + 1}. [${principle.id.substring(0, 8)}...] ${principle.text}`,
+        );
+        console.log(`   Tags: ${principle.tags.join(", ")}`);
         console.log(`   Match: ${result.match_reason}`);
         if (result.similarity_score !== undefined) {
-          console.log(`   Relevance: ${(result.similarity_score * 100).toFixed(1)}%`);
+          console.log(
+            `   Relevance: ${(result.similarity_score * 100).toFixed(1)}%`,
+          );
         }
         console.log();
       }
     }
   } catch (error) {
-    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `Error: ${error instanceof Error ? error.message : String(error)}`,
+    );
     process.exit(1);
   } finally {
     retriever.close();
@@ -177,11 +186,13 @@ async function searchCommand(options: Record<string, string | boolean | undefine
 /**
  * Execute inject command
  */
-async function injectCommand(options: Record<string, string | boolean | undefined>): Promise<void> {
+async function injectCommand(
+  options: Record<string, string | boolean | undefined>,
+): Promise<void> {
   const dbPath = (options.db as string) || DEFAULT_DB_PATH;
-  const outputMode = (options.output as string) || 'stdout';
+  const outputMode = (options.output as string) || "stdout";
   const projectPath = (options.project as string) || process.cwd();
-  const formatStyle = (options.format as string) || 'detailed';
+  const formatStyle = (options.format as string) || "detailed";
 
   if (!existsSync(dbPath)) {
     console.error(`Error: Database not found at ${dbPath}`);
@@ -194,7 +205,7 @@ async function injectCommand(options: Record<string, string | boolean | undefine
   });
 
   const injector = new PrincipleInjector({
-    formatStyle: formatStyle as 'compact' | 'detailed' | 'markdown',
+    formatStyle: formatStyle as "compact" | "detailed" | "markdown",
     includeStats: true,
     includeExamples: false,
   });
@@ -202,7 +213,7 @@ async function injectCommand(options: Record<string, string | boolean | undefine
   try {
     // Build search query
     const query: SearchQuery = {
-      limit: options.top ? Number.parseInt(options.top as string) : 10,
+      limit: options.top ? Number.parseInt(options.top as string, 10) : 10,
     };
 
     if (options.query) {
@@ -210,22 +221,22 @@ async function injectCommand(options: Record<string, string | boolean | undefine
     }
 
     if (options.tags) {
-      query.tags = (options.tags as string).split(',').map((t) => t.trim());
+      query.tags = (options.tags as string).split(",").map((t) => t.trim());
     }
 
     // Execute search
     const response = await retriever.searchExperience(query);
     const principles = response.results
-      .filter((r) => r.type === 'principle')
+      .filter((r) => r.type === "principle")
       .map((r) => r.item);
 
     if (principles.length === 0) {
-      console.log('No principles found matching the query');
+      console.log("No principles found matching the query");
       return;
     }
 
     // Format and output
-    if (outputMode === 'claudemd') {
+    if (outputMode === "claudemd") {
       injector.updateClaudeMd(projectPath, principles);
     } else {
       // stdout
@@ -233,7 +244,9 @@ async function injectCommand(options: Record<string, string | boolean | undefine
       console.log(formatted);
     }
   } catch (error) {
-    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `Error: ${error instanceof Error ? error.message : String(error)}`,
+    );
     process.exit(1);
   } finally {
     retriever.close();
@@ -244,7 +257,7 @@ async function injectCommand(options: Record<string, string | boolean | undefine
  * Execute record-outcome command
  */
 async function recordOutcomeCommand(
-  options: Record<string, string | boolean | undefined>
+  options: Record<string, string | boolean | undefined>,
 ): Promise<void> {
   const dbPath = (options.db as string) || DEFAULT_DB_PATH;
 
@@ -253,19 +266,19 @@ async function recordOutcomeCommand(
     process.exit(1);
   }
 
-  if (!options['principle-id']) {
-    console.error('Error: --principle-id is required');
+  if (!options["principle-id"]) {
+    console.error("Error: --principle-id is required");
     process.exit(1);
   }
 
   if (options.success === undefined) {
-    console.error('Error: --success is required (true or false)');
+    console.error("Error: --success is required (true or false)");
     process.exit(1);
   }
 
-  const principleId = options['principle-id'] as string;
-  const success = options.success === 'true' || options.success === true;
-  const traceId = options['trace-id'] as string | undefined;
+  const principleId = options["principle-id"] as string;
+  const success = options.success === "true" || options.success === true;
+  const traceId = options["trace-id"] as string | undefined;
 
   const retriever = new ExperienceRetriever({
     dbPath,
@@ -274,9 +287,13 @@ async function recordOutcomeCommand(
 
   try {
     await retriever.recordUsage(principleId, success, traceId);
-    console.log(`✓ Recorded ${success ? 'successful' : 'unsuccessful'} use of principle ${principleId}`);
+    console.log(
+      `✓ Recorded ${success ? "successful" : "unsuccessful"} use of principle ${principleId}`,
+    );
   } catch (error) {
-    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `Error: ${error instanceof Error ? error.message : String(error)}`,
+    );
     process.exit(1);
   } finally {
     retriever.close();
@@ -286,7 +303,9 @@ async function recordOutcomeCommand(
 /**
  * Execute show command
  */
-async function showCommand(options: Record<string, string | boolean | undefined>): Promise<void> {
+async function showCommand(
+  options: Record<string, string | boolean | undefined>,
+): Promise<void> {
   const dbPath = (options.db as string) || DEFAULT_DB_PATH;
 
   if (!existsSync(dbPath)) {
@@ -294,12 +313,12 @@ async function showCommand(options: Record<string, string | boolean | undefined>
     process.exit(1);
   }
 
-  if (!options['principle-id']) {
-    console.error('Error: --principle-id is required');
+  if (!options["principle-id"]) {
+    console.error("Error: --principle-id is required");
     process.exit(1);
   }
 
-  const principleId = options['principle-id'] as string;
+  const principleId = options["principle-id"] as string;
 
   const retriever = new ExperienceRetriever({
     dbPath,
@@ -319,7 +338,9 @@ async function showCommand(options: Record<string, string | boolean | undefined>
     const formatted = injector.formatPrincipleDetailed(principle);
     console.log(formatted);
   } catch (error) {
-    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `Error: ${error instanceof Error ? error.message : String(error)}`,
+    );
     process.exit(1);
   } finally {
     retriever.close();
@@ -329,10 +350,12 @@ async function showCommand(options: Record<string, string | boolean | undefined>
 /**
  * Execute top command
  */
-async function topCommand(options: Record<string, string | boolean | undefined>): Promise<void> {
+async function topCommand(
+  options: Record<string, string | boolean | undefined>,
+): Promise<void> {
   const dbPath = (options.db as string) || DEFAULT_DB_PATH;
-  const k = options.top ? Number.parseInt(options.top as string) : 10;
-  const format = (options.format as string) || 'compact';
+  const k = options.top ? Number.parseInt(options.top as string, 10) : 10;
+  const format = (options.format as string) || "compact";
 
   if (!existsSync(dbPath)) {
     console.error(`Error: Database not found at ${dbPath}`);
@@ -350,15 +373,15 @@ async function topCommand(options: Record<string, string | boolean | undefined>)
     const topPrinciples = retriever.getTopPrinciples(k);
 
     if (topPrinciples.length === 0) {
-      console.log('No principles found');
+      console.log("No principles found");
       return;
     }
 
     console.log(`\nTop ${topPrinciples.length} Principles:\n`);
 
-    if (format === 'json') {
+    if (format === "json") {
       console.log(injector.formatJson(topPrinciples));
-    } else if (format === 'detailed') {
+    } else if (format === "detailed") {
       const formatted = injector.formatPrinciplesForPrompt(topPrinciples);
       console.log(formatted);
     } else {
@@ -367,7 +390,9 @@ async function topCommand(options: Record<string, string | boolean | undefined>)
       console.log(formatted);
     }
   } catch (error) {
-    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `Error: ${error instanceof Error ? error.message : String(error)}`,
+    );
     process.exit(1);
   } finally {
     retriever.close();
@@ -377,7 +402,9 @@ async function topCommand(options: Record<string, string | boolean | undefined>)
 /**
  * Execute stats command
  */
-async function statsCommand(options: Record<string, string | boolean | undefined>): Promise<void> {
+async function statsCommand(
+  options: Record<string, string | boolean | undefined>,
+): Promise<void> {
   const dbPath = (options.db as string) || DEFAULT_DB_PATH;
 
   if (!existsSync(dbPath)) {
@@ -393,45 +420,65 @@ async function statsCommand(options: Record<string, string | boolean | undefined
   try {
     const stats = retriever.getStorage().getStats();
 
-    console.log('\n=== Experience Base Statistics ===\n');
+    console.log("\n=== Experience Base Statistics ===\n");
     console.log(`Principles: ${stats.principle_count}`);
     console.log(`Traces: ${stats.trace_count}`);
-    console.log(`Average Principle Score: ${(stats.avg_principle_score * 100).toFixed(1)}%`);
+    console.log(
+      `Average Principle Score: ${(stats.avg_principle_score * 100).toFixed(1)}%`,
+    );
 
     if (stats.trace_success_rate !== undefined) {
-      console.log(`Trace Success Rate: ${(stats.trace_success_rate * 100).toFixed(1)}%`);
+      console.log(
+        `Trace Success Rate: ${(stats.trace_success_rate * 100).toFixed(1)}%`,
+      );
     }
 
     if (stats.avg_trace_duration_ms !== undefined) {
-      console.log(`Average Trace Duration: ${(stats.avg_trace_duration_ms / 1000).toFixed(2)}s`);
+      console.log(
+        `Average Trace Duration: ${(stats.avg_trace_duration_ms / 1000).toFixed(2)}s`,
+      );
     }
 
     if (stats.score_distribution) {
-      console.log('\nScore Distribution:');
-      console.log(`  Min:    ${(stats.score_distribution.min * 100).toFixed(1)}%`);
-      console.log(`  25th:   ${(stats.score_distribution.p25 * 100).toFixed(1)}%`);
-      console.log(`  Median: ${(stats.score_distribution.median * 100).toFixed(1)}%`);
-      console.log(`  75th:   ${(stats.score_distribution.p75 * 100).toFixed(1)}%`);
-      console.log(`  90th:   ${(stats.score_distribution.p90 * 100).toFixed(1)}%`);
-      console.log(`  Max:    ${(stats.score_distribution.max * 100).toFixed(1)}%`);
+      console.log("\nScore Distribution:");
+      console.log(
+        `  Min:    ${(stats.score_distribution.min * 100).toFixed(1)}%`,
+      );
+      console.log(
+        `  25th:   ${(stats.score_distribution.p25 * 100).toFixed(1)}%`,
+      );
+      console.log(
+        `  Median: ${(stats.score_distribution.median * 100).toFixed(1)}%`,
+      );
+      console.log(
+        `  75th:   ${(stats.score_distribution.p75 * 100).toFixed(1)}%`,
+      );
+      console.log(
+        `  90th:   ${(stats.score_distribution.p90 * 100).toFixed(1)}%`,
+      );
+      console.log(
+        `  Max:    ${(stats.score_distribution.max * 100).toFixed(1)}%`,
+      );
     }
 
     if (stats.top_tags && stats.top_tags.length > 0) {
-      console.log('\nTop Tags:');
+      console.log("\nTop Tags:");
       for (const tagInfo of stats.top_tags.slice(0, 10)) {
         console.log(`  ${tagInfo.tag}: ${tagInfo.count}`);
       }
     }
 
     if (stats.time_range) {
-      console.log('\nTime Range:');
+      console.log("\nTime Range:");
       console.log(`  Earliest: ${stats.time_range.earliest}`);
       console.log(`  Latest:   ${stats.time_range.latest}`);
     }
 
     console.log();
   } catch (error) {
-    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `Error: ${error instanceof Error ? error.message : String(error)}`,
+    );
     process.exit(1);
   } finally {
     retriever.close();
@@ -445,27 +492,27 @@ async function main(): Promise<void> {
   const { command, options } = parseArguments();
 
   switch (command) {
-    case 'search':
+    case "search":
       await searchCommand(options);
       break;
-    case 'inject':
+    case "inject":
       await injectCommand(options);
       break;
-    case 'record-outcome':
+    case "record-outcome":
       await recordOutcomeCommand(options);
       break;
-    case 'show':
+    case "show":
       await showCommand(options);
       break;
-    case 'top':
+    case "top":
       await topCommand(options);
       break;
-    case 'stats':
+    case "stats":
       await statsCommand(options);
       break;
-    case 'help':
-    case '--help':
-    case '-h':
+    case "help":
+    case "--help":
+    case "-h":
       printUsage();
       break;
     default:
@@ -478,7 +525,7 @@ async function main(): Promise<void> {
 // Run main if this is the entry point
 if (import.meta.main) {
   main().catch((error) => {
-    console.error('Fatal error:', error);
+    console.error("Fatal error:", error);
     process.exit(1);
   });
 }

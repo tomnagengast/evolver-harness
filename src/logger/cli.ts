@@ -13,8 +13,8 @@
  *   abandon    - Abandon the current session without saving
  */
 
-import * as os from "os";
-import * as path from "path";
+import * as os from "node:os";
+import * as path from "node:path";
 import type { TraceOutcome } from "../types.js";
 import {
   type LogSession,
@@ -133,7 +133,7 @@ async function main() {
           : null;
         const timestamp = options.timestamp || new Date().toISOString();
         const durationMs = options.duration
-          ? parseInt(options.duration, 10)
+          ? Number.parseInt(options.duration, 10)
           : undefined;
 
         let error;
@@ -203,7 +203,7 @@ async function main() {
           options.status ||
           "success") as "success" | "failure" | "partial";
         const outcomeScore = options.score
-          ? parseFloat(options.score)
+          ? Number.parseFloat(options.score)
           : outcomeStatus === "success"
             ? 1.0
             : 0.0;
@@ -227,7 +227,7 @@ async function main() {
         const logger = new TraceLogger(dbPath);
 
         // Reconstruct session in logger
-        logger["currentSession"] = session;
+        logger.currentSession = session;
 
         const trace = logger.endSession(finalAnswer, outcome, {
           tags,
@@ -293,8 +293,6 @@ async function main() {
         }
         break;
       }
-
-      case "help":
       default: {
         console.log(`
 Evolver Harness Trace Logger CLI

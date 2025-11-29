@@ -7,12 +7,12 @@
 
 import { ExpBaseStorage } from "../storage/expbase";
 import {
-  SearchQuery,
-  SearchResponse,
-  SearchResult,
-  Principle,
   calculatePrincipleScore,
-  PrincipleScore,
+  type Principle,
+  type PrincipleScore,
+  type SearchQuery,
+  type SearchResponse,
+  type SearchResult,
 } from "../types";
 
 /**
@@ -333,7 +333,7 @@ export class ExperienceRetriever {
   /**
    * Get the top-k principles by Bayesian score
    */
-  getTopPrinciples(k: number = 10): PrincipleScore[] {
+  getTopPrinciples(k = 10): PrincipleScore[] {
     try {
       return this.storage.getPrincipleScores().slice(0, k);
     } catch (error) {

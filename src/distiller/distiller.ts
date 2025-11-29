@@ -9,31 +9,25 @@
  * - Updates existing principles when similar ones exist
  */
 
-import Anthropic from '@anthropic-ai/sdk';
-import { randomUUID } from 'crypto';
-import {
-  Trace,
-  Principle,
-  NewPrinciple,
-  Triple,
-  TraceReference,
+import Anthropic from "@anthropic-ai/sdk";
+import type { ExpBaseStorage } from "../storage/expbase.js";
+import type {
   DistillationConfig,
   DistillationResult,
-} from '../types.js';
-import { ExpBaseStorage } from '../storage/expbase.js';
+  NewPrinciple,
+  Principle,
+  Trace,
+  Triple,
+} from "../types.js";
 import {
-  generateEmbedding,
+  type EmbeddingConfig,
   findSimilarPrinciples,
-  EmbeddingConfig,
-  cosineSimilarity,
-} from './embeddings.js';
+  generateEmbedding,
+} from "./embeddings.js";
 import {
   DISTILLATION_SYSTEM_PROMPT,
   DISTILLATION_USER_PROMPT_TEMPLATE,
-  BATCH_DISTILLATION_PROMPT,
-  DEDUPLICATION_PROMPT,
-  PRINCIPLE_REFINEMENT_PROMPT,
-} from './prompts.js';
+} from "./prompts.js";
 
 /**
  * Configuration for the Distiller
@@ -68,7 +62,7 @@ export interface DistillerConfig {
  * Result from analyzing a single trace
  */
 interface TraceAnalysisResult {
-  classification: 'success' | 'failure' | 'partial';
+  classification: "success" | "failure" | "partial";
   explanation: string;
   principles: Array<{
     text: string;
@@ -83,7 +77,7 @@ interface TraceAnalysisResult {
  * Decision about whether to merge a new principle
  */
 interface DeduplicationDecision {
-  decision: 'stand_alone' | 'merge' | 'enhance';
+  decision: "stand_alone" | "merge" | "enhance";
   target_principle_id?: string;
   reasoning: string;
   merged_text?: string;
@@ -102,14 +96,16 @@ export class Distiller {
 
     const apiKey = config.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
-      throw new Error('Anthropic API key required. Set ANTHROPIC_API_KEY or pass anthropicApiKey in config');
+      throw new Error(
+        "Anthropic API key required. Set ANTHROPIC_API_KEY or pass anthropicApiKey in config",
+      );
     }
 
     this.anthropic = new Anthropic({ apiKey });
 
     this.config = {
       anthropicApiKey: apiKey,
-      model: config.model || 'claude-sonnet-4-5-20250929',
+      model: config.model || "claude-sonnet-4-5-20250929",
       similarityThreshold: config.similarityThreshold ?? 0.85,
       maxExamplesPerPrinciple: config.maxExamplesPerPrinciple ?? 5,
       minOutcomeScore: config.minOutcomeScore ?? 0.0,
@@ -146,9 +142,11 @@ export class Distiller {
     try {
       // Check if trace meets minimum score requirement
       if (trace.outcome.score < this.config.minOutcomeScore) {
-        this.log(`Skipping trace ${traceId}: score ${trace.outcome.score} below threshold`);
+        this.log(
+          `Skipping trace ${traceId}: score ${trace.outcome.score} below threshold`,
+        );
         result.issues?.push({
-          severity: 'info',
+          severity: "info",
           message: `Trace score ${trace.outcome.score} below minimum ${this.config.minOutcomeScore}`,
           trace_id: traceId,
         });
@@ -167,11 +165,11 @@ export class Distiller {
             trace,
             analysis.triples,
             analysis.tags,
-            result
+            result,
           );
         } catch (error) {
           result.issues?.push({
-            severity: 'error',
+            severity: "error",
             message: `Failed to process principle: ${error instanceof Error ? error.message : String(error)}`,
             trace_id: traceId,
           });
@@ -181,7 +179,7 @@ export class Distiller {
       result.traces_used = 1;
     } catch (error) {
       result.issues?.push({
-        severity: 'error',
+        severity: "error",
         message: `Failed to analyze trace: ${error instanceof Error ? error.message : String(error)}`,
         trace_id: traceId,
       });
@@ -246,7 +244,7 @@ export class Distiller {
 
     // Filter to undistilled traces
     const undistilledTraces = allTraces.filter(
-      (trace) => !referencedTraceIds.has(trace.id)
+      (trace) => !referencedTraceIds.has(trace.id),
     );
 
     this.log(`Found ${undistilledTraces.length} undistilled traces`);
@@ -257,7 +255,7 @@ export class Distiller {
       .slice(0, count);
 
     if (tracesToDistill.length === 0) {
-      this.log('No traces to distill');
+      this.log("No traces to distill");
       return {
         new_principles: [],
         updated_principles: [],
@@ -279,7 +277,7 @@ export class Distiller {
     merged: number;
     updated_principles: Principle[];
   }> {
-    this.log('Running deduplication pass...');
+    this.log("Running deduplication pass...");
 
     const allPrinciples = this.storage.getAllPrinciples();
     const merged: string[] = [];
@@ -291,15 +289,17 @@ export class Distiller {
         try {
           const embedding = await generateEmbedding(
             principle.text,
-            this.config.embeddingConfig
+            this.config.embeddingConfig,
           );
-          const updatedPrinciple = this.storage.updatePrinciple(principle.id, {
+          const _updatedPrinciple = this.storage.updatePrinciple(principle.id, {
             embedding,
           });
           this.log(`Generated embedding for principle ${principle.id}`);
           principle.embedding = embedding;
         } catch (error) {
-          this.log(`Failed to generate embedding for ${principle.id}: ${error}`);
+          this.log(
+            `Failed to generate embedding for ${principle.id}: ${error}`,
+          );
         }
       }
     }
@@ -320,22 +320,29 @@ export class Distiller {
       // Find similar principles
       const similar = findSimilarPrinciples(
         principle.embedding,
-        allPrinciples.filter((p) => p.id !== principle.id && !merged.includes(p.id)),
-        this.config.similarityThreshold
+        allPrinciples.filter(
+          (p) => p.id !== principle.id && !merged.includes(p.id),
+        ),
+        this.config.similarityThreshold,
       );
 
       if (similar.length > 0) {
-        this.log(`Found ${similar.length} similar principles for ${principle.id}`);
+        this.log(
+          `Found ${similar.length} similar principles for ${principle.id}`,
+        );
 
         // Merge similar principles into this one
         for (const { principle: similarPrinciple, similarity } of similar) {
           try {
-            const updatedPrinciple = this.mergePrinciples(principle, similarPrinciple);
+            const updatedPrinciple = this.mergePrinciples(
+              principle,
+              similarPrinciple,
+            );
             updated.push(updatedPrinciple);
             merged.push(similarPrinciple.id);
 
             this.log(
-              `Merged ${similarPrinciple.id} into ${principle.id} (similarity: ${similarity.toFixed(3)})`
+              `Merged ${similarPrinciple.id} into ${principle.id} (similarity: ${similarity.toFixed(3)})`,
             );
           } catch (error) {
             this.log(`Failed to merge principles: ${error}`);
@@ -353,9 +360,14 @@ export class Distiller {
   /**
    * Prune low-scoring principles
    */
-  prunePrinciples(threshold: number, minUsageCount: number = 10): string[] {
-    this.log(`Pruning principles with score < ${threshold} and usage >= ${minUsageCount}...`);
-    const prunedIds = this.storage.pruneLowScorePrinciples(threshold, minUsageCount);
+  prunePrinciples(threshold: number, minUsageCount = 10): string[] {
+    this.log(
+      `Pruning principles with score < ${threshold} and usage >= ${minUsageCount}...`,
+    );
+    const prunedIds = this.storage.pruneLowScorePrinciples(
+      threshold,
+      minUsageCount,
+    );
     this.log(`Pruned ${prunedIds.length} principles`);
     return prunedIds;
   }
@@ -375,25 +387,26 @@ export class Distiller {
         system: DISTILLATION_SYSTEM_PROMPT,
         messages: [
           {
-            role: 'user',
+            role: "user",
             content: prompt,
           },
         ],
       });
 
-      const responseText = message.content[0].type === 'text' ? message.content[0].text : '';
+      const responseText =
+        message.content[0].type === "text" ? message.content[0].text : "";
 
       // Parse JSON response
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        throw new Error('Failed to extract JSON from response');
+        throw new Error("Failed to extract JSON from response");
       }
 
       const analysis = JSON.parse(jsonMatch[0]) as TraceAnalysisResult;
       return analysis;
     } catch (error) {
       throw new Error(
-        `Failed to analyze trace: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to analyze trace: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -406,12 +419,12 @@ export class Distiller {
     trace: Trace,
     triples: Triple[],
     tags: string[],
-    result: DistillationResult
+    result: DistillationResult,
   ): Promise<void> {
     // Generate embedding
     const embedding = await generateEmbedding(
       principleData.text,
-      this.config.embeddingConfig
+      this.config.embeddingConfig,
     );
 
     // Check for similar existing principles
@@ -419,7 +432,7 @@ export class Distiller {
     const similar = findSimilarPrinciples(
       embedding,
       existingPrinciples,
-      this.config.similarityThreshold
+      this.config.similarityThreshold,
     );
 
     if (similar.length > 0) {
@@ -428,7 +441,7 @@ export class Distiller {
       const similarity = similar[0].similarity;
 
       this.log(
-        `Found similar principle ${existingPrinciple.id} (similarity: ${similarity.toFixed(3)})`
+        `Found similar principle ${existingPrinciple.id} (similarity: ${similarity.toFixed(3)})`,
       );
 
       // Add trace as example
@@ -443,7 +456,7 @@ export class Distiller {
         // Keep only most recent examples
         if (examples.length > this.config.maxExamplesPerPrinciple) {
           examples.sort(
-            (a, b) => (b.similarity_score || 0) - (a.similarity_score || 0)
+            (a, b) => (b.similarity_score || 0) - (a.similarity_score || 0),
           );
           examples.splice(this.config.maxExamplesPerPrinciple);
         }
@@ -451,7 +464,7 @@ export class Distiller {
 
       // Merge tags and triples
       const mergedTags = Array.from(
-        new Set([...existingPrinciple.tags, ...tags])
+        new Set([...existingPrinciple.tags, ...tags]),
       );
       const mergedTriples = [...existingPrinciple.triples];
 
@@ -461,23 +474,26 @@ export class Distiller {
           (t) =>
             t.subject === triple.subject &&
             t.relation === triple.relation &&
-            t.object === triple.object
+            t.object === triple.object,
         );
         if (!exists) {
           mergedTriples.push(triple);
         }
       }
 
-      const updatedPrinciple = this.storage.updatePrinciple(existingPrinciple.id, {
-        examples,
-        tags: mergedTags,
-        triples: mergedTriples,
-        confidence: Math.max(
-          existingPrinciple.confidence || 0,
-          principleData.confidence
-        ),
-        version: (existingPrinciple.version || 1) + 1,
-      });
+      const updatedPrinciple = this.storage.updatePrinciple(
+        existingPrinciple.id,
+        {
+          examples,
+          tags: mergedTags,
+          triples: mergedTriples,
+          confidence: Math.max(
+            existingPrinciple.confidence || 0,
+            principleData.confidence,
+          ),
+          version: (existingPrinciple.version || 1) + 1,
+        },
+      );
 
       result.updated_principles.push(updatedPrinciple);
       this.log(`Updated principle ${updatedPrinciple.id}`);
@@ -495,7 +511,7 @@ export class Distiller {
         ],
         embedding,
         confidence: principleData.confidence,
-        source: 'distilled',
+        source: "distilled",
       };
 
       const addedPrinciple = this.storage.addPrinciple(newPrinciple);
@@ -512,13 +528,13 @@ export class Distiller {
     const examples = [...target.examples, ...source.examples];
     const uniqueExamples = examples.filter(
       (ex, idx, arr) =>
-        arr.findIndex((e) => e.trace_id === ex.trace_id) === idx
+        arr.findIndex((e) => e.trace_id === ex.trace_id) === idx,
     );
 
     // Keep only top examples
     if (uniqueExamples.length > this.config.maxExamplesPerPrinciple) {
       uniqueExamples.sort(
-        (a, b) => (b.similarity_score || 0) - (a.similarity_score || 0)
+        (a, b) => (b.similarity_score || 0) - (a.similarity_score || 0),
       );
       uniqueExamples.splice(this.config.maxExamplesPerPrinciple);
     }
@@ -533,7 +549,7 @@ export class Distiller {
         (t) =>
           t.subject === triple.subject &&
           t.relation === triple.relation &&
-          t.object === triple.object
+          t.object === triple.object,
       );
       if (!exists) {
         mergedTriples.push(triple);
@@ -586,4 +602,3 @@ export class Distiller {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
-

@@ -9,12 +9,11 @@
  * - search: Search the experience base
  */
 
-import { EvolverOrchestrator } from './orchestrator.js';
-import { SearchQuery } from '../types.js';
-import { formatPrincipleForDisplay, formatTraceForDisplay } from './contract.js';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import type { SearchQuery } from "../types.js";
+import { EvolverOrchestrator } from "./orchestrator.js";
 
 /**
  * CLI configuration from environment variables
@@ -31,32 +30,39 @@ interface CliConfig {
  */
 function getConfig(): CliConfig {
   return {
-    dbPath: process.env.EVOLVER_DB_PATH || path.join(os.homedir(), '.evolver', 'expbase.db'),
-    enableEmbeddings: process.env.EVOLVER_ENABLE_EMBEDDINGS === 'true',
-    contextFilePath: process.env.EVOLVER_CONTEXT_FILE || path.join(os.homedir(), '.evolver', 'context.md'),
-    verbose: process.env.EVOLVER_VERBOSE === 'true',
+    dbPath:
+      process.env.EVOLVER_DB_PATH ||
+      path.join(os.homedir(), ".evolver", "expbase.db"),
+    enableEmbeddings: process.env.EVOLVER_ENABLE_EMBEDDINGS === "true",
+    contextFilePath:
+      process.env.EVOLVER_CONTEXT_FILE ||
+      path.join(os.homedir(), ".evolver", "context.md"),
+    verbose: process.env.EVOLVER_VERBOSE === "true",
   };
 }
 
 /**
  * Parse command line arguments
  */
-function parseArgs(args: string[]): { command: string; options: Record<string, string | boolean> } {
-  const command = args[0] || 'help';
+function parseArgs(args: string[]): {
+  command: string;
+  options: Record<string, string | boolean>;
+} {
+  const command = args[0] || "help";
   const options: Record<string, string | boolean> = {};
 
   for (let i = 1; i < args.length; i++) {
     const arg = args[i];
 
-    if (arg.startsWith('--')) {
-      const [key, value] = arg.slice(2).split('=');
+    if (arg.startsWith("--")) {
+      const [key, value] = arg.slice(2).split("=");
 
       if (value !== undefined) {
         // --key=value
         options[key] = value;
       } else {
         // --flag or --key value
-        if (i + 1 < args.length && !args[i + 1].startsWith('--')) {
+        if (i + 1 < args.length && !args[i + 1].startsWith("--")) {
           options[key] = args[i + 1];
           i++;
         } else {
@@ -155,13 +161,19 @@ Examples:
 /**
  * Wrap command - prepare context for a Claude Code session
  */
-async function wrapCommand(orchestrator: EvolverOrchestrator, options: Record<string, string | boolean>): Promise<void> {
-  if (!options.task || typeof options.task !== 'string') {
-    console.error('Error: --task is required');
+async function wrapCommand(
+  orchestrator: EvolverOrchestrator,
+  options: Record<string, string | boolean>,
+): Promise<void> {
+  if (!options.task || typeof options.task !== "string") {
+    console.error("Error: --task is required");
     process.exit(1);
   }
 
-  const sessionId = typeof options['session-id'] === 'string' ? options['session-id'] : undefined;
+  const sessionId =
+    typeof options["session-id"] === "string"
+      ? options["session-id"]
+      : undefined;
 
   console.error(`[Wrap] Preparing session context for task: ${options.task}`);
 
@@ -170,7 +182,7 @@ async function wrapCommand(orchestrator: EvolverOrchestrator, options: Record<st
   console.log(
     JSON.stringify(
       {
-        status: 'success',
+        status: "success",
         sessionId: context.sessionId,
         taskDescription: context.taskDescription,
         principlesRetrieved: context.principles.length,
@@ -178,8 +190,8 @@ async function wrapCommand(orchestrator: EvolverOrchestrator, options: Record<st
         timestamp: context.timestamp,
       },
       null,
-      2
-    )
+      2,
+    ),
   );
 }
 
@@ -194,7 +206,7 @@ async function statusCommand(orchestrator: EvolverOrchestrator): Promise<void> {
   console.log(
     JSON.stringify(
       {
-        status: 'success',
+        status: "success",
         expbase: {
           principleCount: stats.expbase.principle_count,
           traceCount: stats.expbase.trace_count,
@@ -222,18 +234,26 @@ async function statusCommand(orchestrator: EvolverOrchestrator): Promise<void> {
         contextFileExists: fs.existsSync(stats.contextFilePath),
       },
       null,
-      2
-    )
+      2,
+    ),
   );
 }
 
 /**
  * Sync command - sync principles to CLAUDE.md
  */
-async function syncCommand(orchestrator: EvolverOrchestrator, options: Record<string, string | boolean>): Promise<void> {
-  const outputPath = typeof options.output === 'string' ? options.output : './CLAUDE.md';
-  const maxPrinciples = typeof options.max === 'string' ? parseInt(options.max, 10) : 20;
-  const minScore = typeof options['min-score'] === 'string' ? parseFloat(options['min-score']) : 0.6;
+async function syncCommand(
+  orchestrator: EvolverOrchestrator,
+  options: Record<string, string | boolean>,
+): Promise<void> {
+  const outputPath =
+    typeof options.output === "string" ? options.output : "./CLAUDE.md";
+  const maxPrinciples =
+    typeof options.max === "string" ? Number.parseInt(options.max, 10) : 20;
+  const minScore =
+    typeof options["min-score"] === "string"
+      ? Number.parseFloat(options["min-score"])
+      : 0.6;
 
   console.error(`[Sync] Syncing principles to ${outputPath}`);
   console.error(`[Sync] Max: ${maxPrinciples}, Min score: ${minScore}`);
@@ -247,48 +267,52 @@ async function syncCommand(orchestrator: EvolverOrchestrator, options: Record<st
     .slice(0, maxPrinciples)
     .map((ps) => ps.principle);
 
-  console.error(`[Sync] Found ${topPrinciples.length} principles meeting criteria`);
+  console.error(
+    `[Sync] Found ${topPrinciples.length} principles meeting criteria`,
+  );
 
   // Build CLAUDE.md content
   const lines: string[] = [];
 
-  lines.push('# CLAUDE.md');
-  lines.push('');
-  lines.push('## Learned Principles');
-  lines.push('');
+  lines.push("# CLAUDE.md");
+  lines.push("");
+  lines.push("## Learned Principles");
+  lines.push("");
   lines.push(
-    `The following ${topPrinciples.length} principles have been learned from experience and should guide your approach:`
+    `The following ${topPrinciples.length} principles have been learned from experience and should guide your approach:`,
   );
-  lines.push('');
+  lines.push("");
 
   for (let i = 0; i < topPrinciples.length; i++) {
     const principle = topPrinciples[i];
     const score = (principle.success_count + 1) / (principle.use_count + 2);
 
-    lines.push(`### ${i + 1}. ${principle.tags.join(' / ')}`);
-    lines.push('');
+    lines.push(`### ${i + 1}. ${principle.tags.join(" / ")}`);
+    lines.push("");
     lines.push(principle.text);
-    lines.push('');
-    lines.push(`**Confidence**: ${score.toFixed(3)} (${principle.use_count} uses, ${principle.success_count} successes)`);
-    lines.push('');
+    lines.push("");
+    lines.push(
+      `**Confidence**: ${score.toFixed(3)} (${principle.use_count} uses, ${principle.success_count} successes)`,
+    );
+    lines.push("");
   }
 
   // Write to file
-  const content = lines.join('\n');
-  fs.writeFileSync(outputPath, content, 'utf-8');
+  const content = lines.join("\n");
+  fs.writeFileSync(outputPath, content, "utf-8");
 
   console.log(
     JSON.stringify(
       {
-        status: 'success',
+        status: "success",
         outputPath,
         principlesSynced: topPrinciples.length,
         minScore,
         maxPrinciples,
       },
       null,
-      2
-    )
+      2,
+    ),
   );
 }
 
@@ -297,53 +321,58 @@ async function syncCommand(orchestrator: EvolverOrchestrator, options: Record<st
  */
 async function searchCommand(
   orchestrator: EvolverOrchestrator,
-  options: Record<string, string | boolean>
+  options: Record<string, string | boolean>,
 ): Promise<void> {
   const query: SearchQuery = {};
 
-  if (options.query && typeof options.query === 'string') {
+  if (options.query && typeof options.query === "string") {
     query.query_text = options.query;
   }
 
-  if (options.tags && typeof options.tags === 'string') {
-    query.tags = options.tags.split(',').map((t) => t.trim());
+  if (options.tags && typeof options.tags === "string") {
+    query.tags = options.tags.split(",").map((t) => t.trim());
   }
 
-  if (options.mode && typeof options.mode === 'string') {
-    query.search_mode = options.mode as 'principles' | 'traces' | 'both';
+  if (options.mode && typeof options.mode === "string") {
+    query.search_mode = options.mode as "principles" | "traces" | "both";
   }
 
-  if (options.limit && typeof options.limit === 'string') {
-    query.limit = parseInt(options.limit, 10);
+  if (options.limit && typeof options.limit === "string") {
+    query.limit = Number.parseInt(options.limit, 10);
   }
 
-  if (options['min-similarity'] && typeof options['min-similarity'] === 'string') {
-    query.min_similarity = parseFloat(options['min-similarity']);
+  if (
+    options["min-similarity"] &&
+    typeof options["min-similarity"] === "string"
+  ) {
+    query.min_similarity = Number.parseFloat(options["min-similarity"]);
   }
 
-  if (options['min-score'] && typeof options['min-score'] === 'string') {
-    query.min_principle_score = parseFloat(options['min-score']);
+  if (options["min-score"] && typeof options["min-score"] === "string") {
+    query.min_principle_score = Number.parseFloat(options["min-score"]);
   }
 
-  if (options.outcome && typeof options.outcome === 'string') {
-    query.outcome_filter = options.outcome as 'success' | 'failure' | 'partial';
+  if (options.outcome && typeof options.outcome === "string") {
+    query.outcome_filter = options.outcome as "success" | "failure" | "partial";
   }
 
   console.error(`[Search] Querying experience base...`);
 
   const result = await orchestrator.searchExperience(query);
 
-  console.error(`[Search] Found ${result.total_count} results in ${result.query_time_ms}ms`);
+  console.error(
+    `[Search] Found ${result.total_count} results in ${result.query_time_ms}ms`,
+  );
 
   // Format output
   const output = {
-    status: 'success',
+    status: "success",
     query,
     results: result.results.map((r) => {
-      if (r.type === 'principle') {
+      if (r.type === "principle") {
         const p = r.item as any;
         return {
-          type: 'principle',
+          type: "principle",
           id: p.id,
           text: p.text,
           tags: p.tags,
@@ -356,7 +385,7 @@ async function searchCommand(
       } else {
         const t = r.item as any;
         return {
-          type: 'trace',
+          type: "trace",
           id: t.id,
           task_summary: t.task_summary,
           outcome: t.outcome,
@@ -387,7 +416,7 @@ async function main(): Promise<void> {
 
   const { command, options } = parseArgs(args);
 
-  if (command === 'help' || options.help) {
+  if (command === "help" || options.help) {
     printHelp();
     process.exit(0);
   }
@@ -395,7 +424,7 @@ async function main(): Promise<void> {
   const config = getConfig();
 
   if (config.verbose) {
-    console.error('[CLI] Configuration:', config);
+    console.error("[CLI] Configuration:", config);
   }
 
   // Initialize orchestrator
@@ -405,25 +434,25 @@ async function main(): Promise<void> {
     contextFilePath: config.contextFilePath,
     verbose: config.verbose,
     embeddingConfig: {
-      provider: config.enableEmbeddings ? 'openai' : 'mock',
+      provider: config.enableEmbeddings ? "openai" : "mock",
     },
   });
 
   try {
     switch (command) {
-      case 'wrap':
+      case "wrap":
         await wrapCommand(orchestrator, options);
         break;
 
-      case 'status':
+      case "status":
         await statusCommand(orchestrator);
         break;
 
-      case 'sync':
+      case "sync":
         await syncCommand(orchestrator, options);
         break;
 
-      case 'search':
+      case "search":
         await searchCommand(orchestrator, options);
         break;
 
@@ -436,13 +465,13 @@ async function main(): Promise<void> {
     console.error(
       JSON.stringify(
         {
-          status: 'error',
+          status: "error",
           error: error instanceof Error ? error.message : String(error),
           stack: error instanceof Error ? error.stack : undefined,
         },
         null,
-        2
-      )
+        2,
+      ),
     );
     process.exit(1);
   } finally {
@@ -453,7 +482,7 @@ async function main(): Promise<void> {
 // Run CLI if this is the main module
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((error) => {
-    console.error('Fatal error:', error);
+    console.error("Fatal error:", error);
     process.exit(1);
   });
 }

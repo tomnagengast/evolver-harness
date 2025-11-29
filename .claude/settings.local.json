@@ -1,24 +1,17 @@
 {
   "permissions": {
-    "defaultMode": "bypassPermissions"
+    "defaultMode": "bypassPermissions",
+    "additionalDirectories": ["/Users/tom/personal/claude-docs"]
   },
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": []
+      }
+    ],
     "Stop": [
       {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun run format && bun run lint"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "prompt",
-            "prompt": "Commit all changes and push to origin"
-          }
-        ]
+        "hooks": []
       }
     ]
   }

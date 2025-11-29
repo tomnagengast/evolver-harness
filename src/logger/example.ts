@@ -7,8 +7,8 @@
  * to capture agent interactions and save them to ExpBase.
  */
 
-import * as os from "os";
-import * as path from "path";
+import * as os from "node:os";
+import * as path from "node:path";
 import { TraceLogger } from "./trace-logger.js";
 
 async function exampleUsage() {

@@ -17,9 +17,9 @@ This harness wraps Claude Code with:
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Claude Code                              │
-├─────────────────────────────────────────────────────────────────┤
+┌────────────────────────────────────────────────────────────────┐
+│                         Claude Code                            │
+├────────────────────────────────────────────────────────────────┤
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
 │  │ Session Hook │→ │ Trace Logger │→ │ ExpBase (SQLite)     │  │
 │  │ (start/end)  │  │              │  │ - Principles         │  │
@@ -34,28 +34,48 @@ This harness wraps Claude Code with:
 │  │ Orchestrator │← │ Retriever    │← │ - Extract principles │  │
 │  │ (pre/post)   │  │              │  │ - Dedupe & merge     │  │
 │  └──────────────┘  └──────────────┘  └──────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ## Quick Start
 
+### Option 1: Hooks-Based (Recommended)
+
+No wrapper script needed - just run `claude` normally from this directory:
+
 ```bash
 # 1. Install dependencies
-bun install   # or npm install
+bun install
 
-# 2. Initialize the environment
+# 2. Initialize the database
 ./bin/evolver-init
 
-# 3. (Optional) Install hooks for automatic trace collection
-./bin/evolver-init --install-hooks
+# 3. Run Claude Code from this directory
+claude
 
-# 4. Wrap a Claude Code session with experience
+# Hooks automatically:
+# - Inject top-scoring principles at session start
+# - Add task-specific principles per prompt
+# - Log all tool calls for traces
+# - Save traces at session end
+```
+
+The hooks are configured in `.claude/settings.json` and run automatically when you run Claude Code from this project directory.
+
+### Option 2: Wrapper Script (Legacy)
+
+```bash
+# Wrap a Claude Code session with experience
 ./bin/evolver --task="Fix the authentication bug"
+```
 
-# 5. After sessions, run distillation to extract principles
+### After Sessions
+
+```bash
+# Run distillation to extract principles from traces
 bun run distill 10   # or: npx tsx src/distiller/cli.ts distill 10
 
-# 6. Check your experience base
+# Check your experience base
 bun run distill:stats   # or: npx tsx src/distiller/cli.ts stats
 ```
 
@@ -231,7 +251,10 @@ When a principle is retrieved:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `EVOLVER_DB_PATH` | `~/.evolver/expbase.db` | Path to SQLite database |
-| `EVOLVER_CONTEXT_FILE` | `~/.evolver/context.md` | Context injection file |
+| `EVOLVER_CONTEXT_FILE` | `~/.evolver/context.md` | Context injection file (wrapper only) |
+| `EVOLVER_STATE_FILE` | `~/.evolver/session-state.json` | Session state for hooks |
+| `EVOLVER_MAX_PRINCIPLES` | `10` | Max principles to inject at session start |
+| `EVOLVER_MIN_SCORE` | `0.5` | Min Bayesian score for principle injection |
 | `EVOLVER_ENABLE_EMBEDDINGS` | `false` | Enable semantic search |
 | `EVOLVER_VERBOSE` | `false` | Enable verbose logging |
 | `ANTHROPIC_API_KEY` | - | Required for distillation |
@@ -239,38 +262,29 @@ When a principle is retrieved:
 
 ## Hooks Integration
 
-The harness integrates with Claude Code via hooks:
+The harness uses Claude Code hooks for seamless integration (configured in `.claude/settings.json`):
 
-```json
-{
-  "hooks": {
-    "SessionStart": {
-      "command": "node",
-      "args": ["hooks/session-start.js"],
-      "description": "Initialize trace logging session"
-    },
-    "PostToolCall": {
-      "command": "node",
-      "args": ["hooks/collect.js"],
-      "description": "Log tool calls to trace"
-    },
-    "SessionEnd": {
-      "command": "node",
-      "args": ["hooks/session-end.js"],
-      "description": "Finalize and save trace"
-    }
-  }
-}
-```
+| Hook | Purpose |
+|------|---------|
+| **SessionStart** | Retrieves top principles and injects them as context |
+| **UserPromptSubmit** | Adds task-specific principles based on prompt keywords |
+| **PostToolUse** | Logs tool calls to session state for trace collection |
+| **SessionEnd** | Saves the complete trace to ExpBase |
+
+Key benefits over the wrapper script:
+- No special command needed - just run `claude`
+- Context injected dynamically (no CLAUDE.md modification)
+- Per-prompt principle retrieval based on task keywords
+- Environment variables persisted via `CLAUDE_ENV_FILE`
 
 ## Workflow
 
 ### Daily Usage
 
-1. Start a wrapped session: `evolver --task="Your task"`
-2. Claude Code runs with injected principles
-3. Hooks capture the trajectory automatically
-4. Session ends, trace is saved, principle scores updated
+1. Run `claude` from the project directory
+2. Hooks inject relevant principles automatically
+3. Work on your tasks as usual
+4. Session ends, trace is saved to ExpBase
 
 ### Periodic Maintenance
 

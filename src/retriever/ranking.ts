@@ -8,13 +8,13 @@
  * - Bayesian principle score (effectiveness)
  */
 
-import {
-  Principle,
-  SearchQuery,
-  calculatePrincipleScore,
-  Triple,
-} from "../types";
 import { cosineSimilarity } from "../distiller/embeddings";
+import {
+  calculatePrincipleScore,
+  type Principle,
+  type SearchQuery,
+  type Triple,
+} from "../types";
 
 /**
  * Configuration for ranking weights
@@ -100,9 +100,10 @@ export function rankPrinciples(
 
   for (const principle of principles) {
     // Calculate component scores
-    const embeddingSimilarity = queryEmbedding && principle.embedding
-      ? cosineSimilarity(queryEmbedding, principle.embedding)
-      : undefined;
+    const embeddingSimilarity =
+      queryEmbedding && principle.embedding
+        ? cosineSimilarity(queryEmbedding, principle.embedding)
+        : undefined;
 
     const tagOverlap = calculateTagOverlap(principle, query);
     const tripleMatch = calculateTripleMatch(principle, query);
@@ -302,7 +303,7 @@ export function topK(ranked: RankedPrinciple[], k: number): RankedPrinciple[] {
  */
 export function diversityRanking(
   ranked: RankedPrinciple[],
-  lambda: number = 0.7, // Balance between relevance (1.0) and diversity (0.0)
+  lambda = 0.7, // Balance between relevance (1.0) and diversity (0.0)
 ): RankedPrinciple[] {
   if (ranked.length <= 1) {
     return ranked;
@@ -316,7 +317,7 @@ export function diversityRanking(
 
   while (remaining.length > 0) {
     let bestIndex = 0;
-    let bestMMR = -Infinity;
+    let bestMMR = Number.NEGATIVE_INFINITY;
 
     for (let i = 0; i < remaining.length; i++) {
       const candidate = remaining[i];
@@ -366,7 +367,11 @@ function calculatePrincipleSimilarity(p1: Principle, p2: Principle): number {
   const tagSim = tagUnion > 0 ? tagIntersection / tagUnion : 0;
 
   // Embedding similarity if available
-  if (p1.embedding && p2.embedding && p1.embedding.length === p2.embedding.length) {
+  if (
+    p1.embedding &&
+    p2.embedding &&
+    p1.embedding.length === p2.embedding.length
+  ) {
     const embSim = cosineSimilarity(p1.embedding, p2.embedding);
     return (tagSim + embSim) / 2;
   }

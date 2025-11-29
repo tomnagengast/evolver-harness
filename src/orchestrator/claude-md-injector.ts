@@ -5,9 +5,13 @@
  * Provides safe backup/restore mechanisms and automatic cleanup.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import { Principle, PrincipleScore, calculatePrincipleScore } from '../types.js';
+import * as fs from "node:fs";
+import * as path from "node:path";
+import {
+  calculatePrincipleScore,
+  type Principle,
+  type PrincipleScore,
+} from "../types.js";
 
 /**
  * Configuration for CLAUDE.md injection
@@ -26,7 +30,7 @@ export interface InjectorConfig {
   maxPrinciples?: number;
 
   /** Format style for principles */
-  formatStyle?: 'compact' | 'detailed';
+  formatStyle?: "compact" | "detailed";
 
   /** Enable verbose logging */
   verbose?: boolean;
@@ -35,9 +39,9 @@ export interface InjectorConfig {
 /**
  * Section markers for identifying injected content
  */
-const EXPERIENCE_SECTION_START = '<!-- EVOLVER_EXPERIENCE_START -->';
-const EXPERIENCE_SECTION_END = '<!-- EVOLVER_EXPERIENCE_END -->';
-const EXPERIENCE_HEADING = '## Relevant Experience';
+const EXPERIENCE_SECTION_START = "<!-- EVOLVER_EXPERIENCE_START -->";
+const EXPERIENCE_SECTION_END = "<!-- EVOLVER_EXPERIENCE_END -->";
+const EXPERIENCE_HEADING = "## Relevant Experience";
 
 /**
  * Template for the experience section
@@ -64,13 +68,14 @@ export class ClaudeMdInjector {
   private config: Required<InjectorConfig>;
 
   constructor(config: InjectorConfig = {}) {
-    const claudeMdPath = config.claudeMdPath || path.join(process.cwd(), 'CLAUDE.md');
+    const claudeMdPath =
+      config.claudeMdPath || path.join(process.cwd(), "CLAUDE.md");
     this.config = {
       claudeMdPath,
       backupPath: config.backupPath || `${claudeMdPath}.evolver-backup`,
       includeStats: config.includeStats ?? true,
       maxPrinciples: config.maxPrinciples ?? 10,
-      formatStyle: config.formatStyle ?? 'compact',
+      formatStyle: config.formatStyle ?? "compact",
       verbose: config.verbose ?? false,
     };
   }
@@ -79,40 +84,51 @@ export class ClaudeMdInjector {
    * Add experience section to CLAUDE.md
    * Creates backup before modification
    */
-  async addExperienceSection(principles: Principle[] | PrincipleScore[]): Promise<void> {
+  async addExperienceSection(
+    principles: Principle[] | PrincipleScore[],
+  ): Promise<void> {
     if (this.config.verbose) {
-      console.error(`[Injector] Adding experience section with ${principles.length} principles`);
+      console.error(
+        `[Injector] Adding experience section with ${principles.length} principles`,
+      );
     }
 
     // Create backup first
     await this.backup();
 
     // Read current content
-    let content = '';
+    let content = "";
     if (fs.existsSync(this.config.claudeMdPath)) {
-      content = fs.readFileSync(this.config.claudeMdPath, 'utf-8');
+      content = fs.readFileSync(this.config.claudeMdPath, "utf-8");
     } else {
       // Create minimal CLAUDE.md if it doesn't exist
-      content = '# CLAUDE.md\n\nProject-specific instructions for Claude.\n';
+      content = "# CLAUDE.md\n\nProject-specific instructions for Claude.\n";
     }
 
     // Remove existing experience section if present
     content = this.removeExperienceSection(content);
 
     // Format principles
-    const principlesText = this.formatPrinciples(principles.slice(0, this.config.maxPrinciples));
+    const principlesText = this.formatPrinciples(
+      principles.slice(0, this.config.maxPrinciples),
+    );
 
     // Build experience section
-    const experienceSection = EXPERIENCE_SECTION_TEMPLATE.replace('{principles}', principlesText);
+    const experienceSection = EXPERIENCE_SECTION_TEMPLATE.replace(
+      "{principles}",
+      principlesText,
+    );
 
     // Inject at the end of the file
     const injectedContent = `${content.trimEnd()}\n\n${experienceSection}\n`;
 
     // Write back
-    fs.writeFileSync(this.config.claudeMdPath, injectedContent, 'utf-8');
+    fs.writeFileSync(this.config.claudeMdPath, injectedContent, "utf-8");
 
     if (this.config.verbose) {
-      console.error(`[Injector] Experience section added to ${this.config.claudeMdPath}`);
+      console.error(
+        `[Injector] Experience section added to ${this.config.claudeMdPath}`,
+      );
     }
   }
 
@@ -121,23 +137,23 @@ export class ClaudeMdInjector {
    */
   async removeExperienceSection(): Promise<void> {
     if (this.config.verbose) {
-      console.error('[Injector] Removing experience section');
+      console.error("[Injector] Removing experience section");
     }
 
     if (!fs.existsSync(this.config.claudeMdPath)) {
       if (this.config.verbose) {
-        console.error('[Injector] CLAUDE.md does not exist, nothing to remove');
+        console.error("[Injector] CLAUDE.md does not exist, nothing to remove");
       }
       return;
     }
 
-    const content = fs.readFileSync(this.config.claudeMdPath, 'utf-8');
+    const content = fs.readFileSync(this.config.claudeMdPath, "utf-8");
     const cleaned = this.removeExperienceSection(content);
 
-    fs.writeFileSync(this.config.claudeMdPath, cleaned, 'utf-8');
+    fs.writeFileSync(this.config.claudeMdPath, cleaned, "utf-8");
 
     if (this.config.verbose) {
-      console.error('[Injector] Experience section removed');
+      console.error("[Injector] Experience section removed");
     }
   }
 
@@ -147,13 +163,13 @@ export class ClaudeMdInjector {
   async backup(): Promise<void> {
     if (!fs.existsSync(this.config.claudeMdPath)) {
       if (this.config.verbose) {
-        console.error('[Injector] No CLAUDE.md to backup');
+        console.error("[Injector] No CLAUDE.md to backup");
       }
       return;
     }
 
-    const content = fs.readFileSync(this.config.claudeMdPath, 'utf-8');
-    fs.writeFileSync(this.config.backupPath, content, 'utf-8');
+    const content = fs.readFileSync(this.config.claudeMdPath, "utf-8");
+    fs.writeFileSync(this.config.backupPath, content, "utf-8");
 
     if (this.config.verbose) {
       console.error(`[Injector] Backup created at ${this.config.backupPath}`);
@@ -166,19 +182,19 @@ export class ClaudeMdInjector {
   async restore(): Promise<void> {
     if (!fs.existsSync(this.config.backupPath)) {
       if (this.config.verbose) {
-        console.error('[Injector] No backup to restore');
+        console.error("[Injector] No backup to restore");
       }
       return;
     }
 
-    const content = fs.readFileSync(this.config.backupPath, 'utf-8');
-    fs.writeFileSync(this.config.claudeMdPath, content, 'utf-8');
+    const content = fs.readFileSync(this.config.backupPath, "utf-8");
+    fs.writeFileSync(this.config.claudeMdPath, content, "utf-8");
 
     // Clean up backup
     fs.unlinkSync(this.config.backupPath);
 
     if (this.config.verbose) {
-      console.error('[Injector] CLAUDE.md restored from backup');
+      console.error("[Injector] CLAUDE.md restored from backup");
     }
   }
 
@@ -197,7 +213,7 @@ export class ClaudeMdInjector {
       return false;
     }
 
-    const content = fs.readFileSync(this.config.claudeMdPath, 'utf-8');
+    const content = fs.readFileSync(this.config.claudeMdPath, "utf-8");
     return content.includes(EXPERIENCE_SECTION_START);
   }
 
@@ -236,9 +252,11 @@ export class ClaudeMdInjector {
 
     // Remove from start marker to end marker (inclusive)
     const before = content.substring(0, startIndex).trimEnd();
-    const after = content.substring(endIndex + EXPERIENCE_SECTION_END.length).trimStart();
+    const after = content
+      .substring(endIndex + EXPERIENCE_SECTION_END.length)
+      .trimStart();
 
-    return before + (after ? '\n\n' + after : '') + '\n';
+    return `${before + (after ? `\n\n${after}` : "")}\n`;
   }
 
   /**
@@ -246,7 +264,7 @@ export class ClaudeMdInjector {
    */
   private formatPrinciples(principles: Principle[] | PrincipleScore[]): string {
     if (principles.length === 0) {
-      return 'No relevant principles found for this task.';
+      return "No relevant principles found for this task.";
     }
 
     const isPrincipleScores = this.isPrincipleScoreArray(principles);
@@ -255,24 +273,31 @@ export class ClaudeMdInjector {
     for (let i = 0; i < principles.length; i++) {
       const item = principles[i];
       const principle = isPrincipleScores ? item.principle : item;
-      const score = isPrincipleScores ? item.score : calculatePrincipleScore(principle);
+      const score = isPrincipleScores
+        ? item.score
+        : calculatePrincipleScore(principle);
 
-      if (this.config.formatStyle === 'compact') {
+      if (this.config.formatStyle === "compact") {
         lines.push(this.formatPrincipleCompact(principle, score, i + 1));
       } else {
         lines.push(this.formatPrincipleDetailed(principle, score, i + 1));
       }
     }
 
-    return lines.join('\n\n');
+    return lines.join("\n\n");
   }
 
   /**
    * Format a single principle in compact style
    */
-  private formatPrincipleCompact(principle: Principle, score: number, index: number): string {
-    const confidence = score > 0.8 ? 'HIGH' : score > 0.6 ? 'MEDIUM' : 'LOW';
-    const tags = principle.tags.length > 0 ? ` (${principle.tags.join(', ')})` : '';
+  private formatPrincipleCompact(
+    principle: Principle,
+    score: number,
+    index: number,
+  ): string {
+    const confidence = score > 0.8 ? "HIGH" : score > 0.6 ? "MEDIUM" : "LOW";
+    const tags =
+      principle.tags.length > 0 ? ` (${principle.tags.join(", ")})` : "";
 
     let output = `**${index}.** ${principle.text}${tags}`;
 
@@ -286,44 +311,56 @@ export class ClaudeMdInjector {
   /**
    * Format a single principle in detailed style
    */
-  private formatPrincipleDetailed(principle: Principle, score: number, index: number): string {
-    const confidence = score > 0.8 ? 'HIGH' : score > 0.6 ? 'MEDIUM' : 'LOW';
+  private formatPrincipleDetailed(
+    principle: Principle,
+    score: number,
+    index: number,
+  ): string {
+    const confidence = score > 0.8 ? "HIGH" : score > 0.6 ? "MEDIUM" : "LOW";
     const lines: string[] = [];
 
-    lines.push(`### ${index}. ${principle.text.substring(0, 80)}${principle.text.length > 80 ? '...' : ''}`);
-    lines.push('');
+    lines.push(
+      `### ${index}. ${principle.text.substring(0, 80)}${principle.text.length > 80 ? "..." : ""}`,
+    );
+    lines.push("");
     lines.push(principle.text);
 
     if (principle.tags.length > 0) {
-      lines.push('');
-      lines.push(`**Tags:** ${principle.tags.join(', ')}`);
+      lines.push("");
+      lines.push(`**Tags:** ${principle.tags.join(", ")}`);
     }
 
     if (this.config.includeStats) {
-      lines.push('');
+      lines.push("");
       lines.push(
-        `**Confidence:** ${confidence} (${(score * 100).toFixed(1)}% - ${principle.success_count} successes / ${principle.use_count} uses)`
+        `**Confidence:** ${confidence} (${(score * 100).toFixed(1)}% - ${principle.success_count} successes / ${principle.use_count} uses)`,
       );
     }
 
     if (principle.triples.length > 0) {
-      lines.push('');
-      lines.push('**Context:**');
+      lines.push("");
+      lines.push("**Context:**");
       for (const triple of principle.triples.slice(0, 3)) {
-        lines.push(`- ${triple.subject} → ${triple.relation} → ${triple.object}`);
+        lines.push(
+          `- ${triple.subject} → ${triple.relation} → ${triple.object}`,
+        );
       }
     }
 
-    return lines.join('\n');
+    return lines.join("\n");
   }
 
   /**
    * Type guard for PrincipleScore arrays
    */
   private isPrincipleScoreArray(
-    principles: Principle[] | PrincipleScore[]
+    principles: Principle[] | PrincipleScore[],
   ): principles is PrincipleScore[] {
-    return principles.length > 0 && 'score' in principles[0] && 'principle' in principles[0];
+    return (
+      principles.length > 0 &&
+      "score" in principles[0] &&
+      "principle" in principles[0]
+    );
   }
 }
 
@@ -332,7 +369,7 @@ export class ClaudeMdInjector {
  */
 export async function injectPrinciples(
   principles: Principle[] | PrincipleScore[],
-  config?: InjectorConfig
+  config?: InjectorConfig,
 ): Promise<void> {
   const injector = new ClaudeMdInjector(config);
   await injector.addExperienceSection(principles);
@@ -341,7 +378,9 @@ export async function injectPrinciples(
 /**
  * Convenience function to remove experience section from CLAUDE.md
  */
-export async function removeExperienceSection(config?: InjectorConfig): Promise<void> {
+export async function removeExperienceSection(
+  config?: InjectorConfig,
+): Promise<void> {
   const injector = new ClaudeMdInjector(config);
   await injector.removeExperienceSection();
 }

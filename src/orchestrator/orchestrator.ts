@@ -8,20 +8,22 @@
  * - Claude Code session lifecycle
  */
 
-import { randomUUID } from 'crypto';
-import { ExpBaseStorage } from '../storage/expbase.js';
-import { TraceLogger, LogSession } from '../logger/trace-logger.js';
-import { SearchQuery, Principle, Trace, SearchResult } from '../types.js';
+import { randomUUID } from "node:crypto";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import {
-  EVOLVER_SYSTEM_PROMPT,
+  cosineSimilarity,
+  generateEmbedding,
+} from "../distiller/embeddings.js";
+import { type LogSession, TraceLogger } from "../logger/trace-logger.js";
+import { ExpBaseStorage } from "../storage/expbase.js";
+import type { Principle, SearchQuery, Trace } from "../types.js";
+import {
   DEFAULT_SEARCH_CONFIG,
+  EVOLVER_SYSTEM_PROMPT,
   formatPrincipleForDisplay,
-  formatTraceForDisplay,
-} from './contract.js';
-import { generateEmbedding, cosineSimilarity } from '../distiller/embeddings.js';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+} from "./contract.js";
 
 /**
  * Configuration for the orchestrator
@@ -35,7 +37,7 @@ export interface OrchestratorConfig {
 
   /** Embedding provider configuration */
   embeddingConfig?: {
-    provider?: 'openai' | 'mock';
+    provider?: "openai" | "mock";
     apiKey?: string;
     model?: string;
   };
@@ -74,7 +76,7 @@ export interface SessionContext {
  */
 export interface SearchExperienceResult {
   results: Array<{
-    type: 'principle' | 'trace';
+    type: "principle" | "trace";
     item: Principle | Trace;
     similarity_score?: number;
     match_reason?: string;
@@ -95,8 +97,8 @@ export class EvolverOrchestrator {
   constructor(config: OrchestratorConfig) {
     this.config = {
       enableEmbeddings: false,
-      embeddingConfig: { provider: 'mock' },
-      contextFilePath: path.join(os.homedir(), '.evolver', 'context.md'),
+      embeddingConfig: { provider: "mock" },
+      contextFilePath: path.join(os.homedir(), ".evolver", "context.md"),
       maxPrinciplesInContext: 10,
       minPrincipleScoreForContext: 0.6,
       verbose: false,
@@ -107,7 +109,7 @@ export class EvolverOrchestrator {
     this.logger = new TraceLogger(this.config.dbPath);
 
     if (this.config.verbose) {
-      console.error('[EvolverOrchestrator] Initialized with config:', {
+      console.error("[EvolverOrchestrator] Initialized with config:", {
         dbPath: this.config.dbPath,
         enableEmbeddings: this.config.enableEmbeddings,
         contextFilePath: this.config.contextFilePath,
@@ -119,7 +121,10 @@ export class EvolverOrchestrator {
    * Wrap a Claude Code session with experience-based context
    * This is the main entry point for the orchestrator
    */
-  async wrapSession(taskDescription: string, options?: { sessionId?: string }): Promise<SessionContext> {
+  async wrapSession(
+    taskDescription: string,
+    options?: { sessionId?: string },
+  ): Promise<SessionContext> {
     const sessionId = options?.sessionId || randomUUID();
     const startTime = Date.now();
 
@@ -133,7 +138,7 @@ export class EvolverOrchestrator {
 
     if (this.config.verbose) {
       console.error(
-        `[EvolverOrchestrator] Retrieved ${principles.length} relevant principles (${Date.now() - startTime}ms)`
+        `[EvolverOrchestrator] Retrieved ${principles.length} relevant principles (${Date.now() - startTime}ms)`,
       );
     }
 
@@ -152,7 +157,9 @@ export class EvolverOrchestrator {
     await this.injectContext(context);
 
     if (this.config.verbose) {
-      console.error(`[EvolverOrchestrator] Context injected to ${this.config.contextFilePath}`);
+      console.error(
+        `[EvolverOrchestrator] Context injected to ${this.config.contextFilePath}`,
+      );
     }
 
     return context;
@@ -162,7 +169,10 @@ export class EvolverOrchestrator {
    * Pre-session preparation: retrieve relevant principles before Claude Code session
    * Returns principles that should be injected into context
    */
-  async preSession(taskDescription: string, options?: { sessionId?: string }): Promise<{
+  async preSession(
+    taskDescription: string,
+    options?: { sessionId?: string },
+  ): Promise<{
     sessionId: string;
     principles: Principle[];
     timestamp: string;
@@ -180,7 +190,7 @@ export class EvolverOrchestrator {
 
     if (this.config.verbose) {
       console.error(
-        `[EvolverOrchestrator] Retrieved ${principles.length} principles (${Date.now() - startTime}ms)`
+        `[EvolverOrchestrator] Retrieved ${principles.length} principles (${Date.now() - startTime}ms)`,
       );
     }
 
@@ -207,7 +217,7 @@ export class EvolverOrchestrator {
    * Should be called after Claude Code session completes
    */
   async postSession(outcome: {
-    status: 'success' | 'failure' | 'partial';
+    status: "success" | "failure" | "partial";
     score: number;
     explanation?: string;
   }): Promise<{
@@ -215,17 +225,19 @@ export class EvolverOrchestrator {
     traceId?: string;
   }> {
     if (this.config.verbose) {
-      console.error(`[EvolverOrchestrator] Post-session with outcome: ${outcome.status}`);
+      console.error(
+        `[EvolverOrchestrator] Post-session with outcome: ${outcome.status}`,
+      );
     }
 
     if (!this.currentContext) {
       if (this.config.verbose) {
-        console.error('[EvolverOrchestrator] No active context to update');
+        console.error("[EvolverOrchestrator] No active context to update");
       }
       return { principlesUpdated: 0 };
     }
 
-    const wasSuccessful = outcome.status === 'success';
+    const wasSuccessful = outcome.status === "success";
     const principles = this.currentContext.principles;
 
     // Update principle usage statistics
@@ -236,14 +248,10 @@ export class EvolverOrchestrator {
     const currentSession = this.logger.getCurrentSession();
     if (currentSession) {
       try {
-        const trace = this.logger.endSession(
-          'Session completed',
-          outcome,
-          {
-            tags: ['orchestrated'],
-            context: { taskDescription: this.currentContext.taskDescription },
-          }
-        );
+        const trace = this.logger.endSession("Session completed", outcome, {
+          tags: ["orchestrated"],
+          context: { taskDescription: this.currentContext.taskDescription },
+        });
         traceId = trace.id;
 
         if (this.config.verbose) {
@@ -251,7 +259,7 @@ export class EvolverOrchestrator {
         }
       } catch (error) {
         if (this.config.verbose) {
-          console.error('[EvolverOrchestrator] Failed to save trace:', error);
+          console.error("[EvolverOrchestrator] Failed to save trace:", error);
         }
       }
     }
@@ -264,12 +272,15 @@ export class EvolverOrchestrator {
 
         if (this.config.verbose) {
           console.error(
-            `[EvolverOrchestrator] Updated principle ${principle.id}: ${wasSuccessful ? 'success' : 'failure'}`
+            `[EvolverOrchestrator] Updated principle ${principle.id}: ${wasSuccessful ? "success" : "failure"}`,
           );
         }
       } catch (error) {
         if (this.config.verbose) {
-          console.error(`[EvolverOrchestrator] Failed to update principle ${principle.id}:`, error);
+          console.error(
+            `[EvolverOrchestrator] Failed to update principle ${principle.id}:`,
+            error,
+          );
         }
       }
     }
@@ -278,7 +289,9 @@ export class EvolverOrchestrator {
     this.currentContext = null;
 
     if (this.config.verbose) {
-      console.error(`[EvolverOrchestrator] Post-session complete: ${principlesUpdated} principles updated`);
+      console.error(
+        `[EvolverOrchestrator] Post-session complete: ${principlesUpdated} principles updated`,
+      );
     }
 
     return {
@@ -300,26 +313,26 @@ export class EvolverOrchestrator {
 
     // Add reasoning contract
     lines.push(EVOLVER_SYSTEM_PROMPT);
-    lines.push('');
+    lines.push("");
 
     // Add retrieved principles
     if (this.currentContext.principles.length > 0) {
-      lines.push('## Retrieved Principles for This Session');
-      lines.push('');
+      lines.push("## Retrieved Principles for This Session");
+      lines.push("");
       lines.push(
-        `The following ${this.currentContext.principles.length} principles are relevant to your current task:`
+        `The following ${this.currentContext.principles.length} principles are relevant to your current task:`,
       );
-      lines.push('');
+      lines.push("");
 
       for (const principle of this.currentContext.principles) {
-        lines.push('---');
-        lines.push('');
+        lines.push("---");
+        lines.push("");
         lines.push(formatPrincipleForDisplay(principle));
-        lines.push('');
+        lines.push("");
       }
     }
 
-    return lines.join('\n');
+    return lines.join("\n");
   }
 
   /**
@@ -340,22 +353,30 @@ export class EvolverOrchestrator {
   private async retrieveWithEmbeddings(task: string): Promise<Principle[]> {
     try {
       // Generate embedding for the task
-      const taskEmbedding = await generateEmbedding(task, this.config.embeddingConfig);
+      const taskEmbedding = await generateEmbedding(
+        task,
+        this.config.embeddingConfig,
+      );
 
       // Get all principles with embeddings
-      const allPrinciples = this.storage.getAllPrinciples().filter((p) => p.embedding);
+      const allPrinciples = this.storage
+        .getAllPrinciples()
+        .filter((p) => p.embedding);
 
       // Calculate similarities
       const scored = allPrinciples.map((principle) => ({
         principle,
-        similarity: principle.embedding ? cosineSimilarity(taskEmbedding, principle.embedding) : 0,
+        similarity: principle.embedding
+          ? cosineSimilarity(taskEmbedding, principle.embedding)
+          : 0,
       }));
 
       // Filter and sort
       const filtered = scored
         .filter((s) => s.similarity >= DEFAULT_SEARCH_CONFIG.minSimilarity)
         .filter((s) => {
-          const score = (s.principle.success_count + 1) / (s.principle.use_count + 2);
+          const score =
+            (s.principle.success_count + 1) / (s.principle.use_count + 2);
           return score >= this.config.minPrincipleScoreForContext;
         })
         .sort((a, b) => b.similarity - a.similarity)
@@ -364,7 +385,10 @@ export class EvolverOrchestrator {
       return filtered.map((s) => s.principle);
     } catch (error) {
       if (this.config.verbose) {
-        console.error('[EvolverOrchestrator] Embedding search failed, falling back to text search:', error);
+        console.error(
+          "[EvolverOrchestrator] Embedding search failed, falling back to text search:",
+          error,
+        );
       }
       return this.retrieveWithTextSearch(task);
     }
@@ -376,15 +400,30 @@ export class EvolverOrchestrator {
   private async retrieveWithTextSearch(task: string): Promise<Principle[]> {
     // Extract potential tags from task description
     const words = task.toLowerCase().split(/\s+/);
-    const commonWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'with']);
-    const potentialTags = words.filter((w) => w.length > 3 && !commonWords.has(w));
+    const commonWords = new Set([
+      "the",
+      "a",
+      "an",
+      "and",
+      "or",
+      "but",
+      "in",
+      "on",
+      "at",
+      "to",
+      "for",
+      "with",
+    ]);
+    const potentialTags = words.filter(
+      (w) => w.length > 3 && !commonWords.has(w),
+    );
 
     // Search by tags
     const query: SearchQuery = {
       tags: potentialTags,
       limit: this.config.maxPrinciplesInContext * 2, // Get extra to filter by score
       min_principle_score: this.config.minPrincipleScoreForContext,
-      search_mode: 'principles',
+      search_mode: "principles",
     };
 
     const principles = this.storage.searchPrinciples(query);
@@ -409,41 +448,43 @@ export class EvolverOrchestrator {
     const lines: string[] = [];
 
     // Header
-    lines.push('# Evolver Experience Context');
-    lines.push('');
+    lines.push("# Evolver Experience Context");
+    lines.push("");
     lines.push(`Session: ${context.sessionId}`);
     lines.push(`Task: ${context.taskDescription}`);
     lines.push(`Generated: ${context.timestamp}`);
-    lines.push('');
+    lines.push("");
 
     // System prompt
-    lines.push('## Reasoning Contract');
-    lines.push('');
+    lines.push("## Reasoning Contract");
+    lines.push("");
     lines.push(context.systemPrompt);
-    lines.push('');
+    lines.push("");
 
     // Retrieved principles
     if (context.principles.length > 0) {
-      lines.push('## Retrieved Principles');
-      lines.push('');
-      lines.push(`Found ${context.principles.length} relevant principles from experience base:`);
-      lines.push('');
+      lines.push("## Retrieved Principles");
+      lines.push("");
+      lines.push(
+        `Found ${context.principles.length} relevant principles from experience base:`,
+      );
+      lines.push("");
 
       for (const principle of context.principles) {
-        lines.push('---');
-        lines.push('');
+        lines.push("---");
+        lines.push("");
         lines.push(formatPrincipleForDisplay(principle));
-        lines.push('');
+        lines.push("");
       }
     } else {
-      lines.push('## Retrieved Principles');
-      lines.push('');
-      lines.push('No relevant principles found. This may be a novel task.');
-      lines.push('');
+      lines.push("## Retrieved Principles");
+      lines.push("");
+      lines.push("No relevant principles found. This may be a novel task.");
+      lines.push("");
     }
 
     // Write to file
-    const content = lines.join('\n');
+    const content = lines.join("\n");
     const dir = path.dirname(this.config.contextFilePath);
 
     // Ensure directory exists
@@ -451,7 +492,7 @@ export class EvolverOrchestrator {
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    fs.writeFileSync(this.config.contextFilePath, content, 'utf-8');
+    fs.writeFileSync(this.config.contextFilePath, content, "utf-8");
   }
 
   /**
@@ -461,25 +502,30 @@ export class EvolverOrchestrator {
     const startTime = Date.now();
 
     // Determine search mode
-    const searchMode = query.search_mode || 'both';
+    const searchMode = query.search_mode || "both";
 
     // Set defaults
-    const limit = Math.min(query.limit || DEFAULT_SEARCH_CONFIG.limit, DEFAULT_SEARCH_CONFIG.maxLimit);
-    const minSimilarity = query.min_similarity ?? DEFAULT_SEARCH_CONFIG.minSimilarity;
-    const minPrincipleScore = query.min_principle_score ?? DEFAULT_SEARCH_CONFIG.minPrincipleScore;
+    const limit = Math.min(
+      query.limit || DEFAULT_SEARCH_CONFIG.limit,
+      DEFAULT_SEARCH_CONFIG.maxLimit,
+    );
+    const minSimilarity =
+      query.min_similarity ?? DEFAULT_SEARCH_CONFIG.minSimilarity;
+    const minPrincipleScore =
+      query.min_principle_score ?? DEFAULT_SEARCH_CONFIG.minPrincipleScore;
 
     const results: Array<{
-      type: 'principle' | 'trace';
+      type: "principle" | "trace";
       item: Principle | Trace;
       similarity_score?: number;
       match_reason?: string;
     }> = [];
 
     // Search principles
-    if (searchMode === 'principles' || searchMode === 'both') {
+    if (searchMode === "principles" || searchMode === "both") {
       const principleQuery: SearchQuery = {
         ...query,
-        search_mode: 'principles',
+        search_mode: "principles",
         limit,
         min_similarity: minSimilarity,
         min_principle_score: minPrincipleScore,
@@ -490,14 +536,19 @@ export class EvolverOrchestrator {
       // Use embeddings if enabled and query_text is provided
       if (this.config.enableEmbeddings && query.query_text) {
         try {
-          const queryEmbedding = await generateEmbedding(query.query_text, this.config.embeddingConfig);
+          const queryEmbedding = await generateEmbedding(
+            query.query_text,
+            this.config.embeddingConfig,
+          );
           const allPrinciples = this.storage.searchPrinciples(principleQuery);
 
           const scored = allPrinciples
             .filter((p) => p.embedding)
             .map((p) => ({
               principle: p,
-              similarity: p.embedding ? cosineSimilarity(queryEmbedding, p.embedding) : 0,
+              similarity: p.embedding
+                ? cosineSimilarity(queryEmbedding, p.embedding)
+                : 0,
             }))
             .filter((s) => s.similarity >= minSimilarity)
             .sort((a, b) => b.similarity - a.similarity)
@@ -505,7 +556,7 @@ export class EvolverOrchestrator {
 
           for (const { principle, similarity } of scored) {
             results.push({
-              type: 'principle',
+              type: "principle",
               item: principle,
               similarity_score: similarity,
               match_reason: `Semantic similarity: ${similarity.toFixed(3)}`,
@@ -513,7 +564,10 @@ export class EvolverOrchestrator {
           }
         } catch (error) {
           if (this.config.verbose) {
-            console.error('[EvolverOrchestrator] Embedding search failed:', error);
+            console.error(
+              "[EvolverOrchestrator] Embedding search failed:",
+              error,
+            );
           }
           // Fall through to text search
           principles = this.storage.searchPrinciples(principleQuery);
@@ -526,19 +580,21 @@ export class EvolverOrchestrator {
       if (results.length === 0) {
         for (const principle of principles.slice(0, limit)) {
           results.push({
-            type: 'principle',
+            type: "principle",
             item: principle,
-            match_reason: query.tags ? `Matched tags: ${query.tags.join(', ')}` : 'Tag/text match',
+            match_reason: query.tags
+              ? `Matched tags: ${query.tags.join(", ")}`
+              : "Tag/text match",
           });
         }
       }
     }
 
     // Search traces
-    if (searchMode === 'traces' || searchMode === 'both') {
+    if (searchMode === "traces" || searchMode === "both") {
       const traceQuery: SearchQuery = {
         ...query,
-        search_mode: 'traces',
+        search_mode: "traces",
         limit,
       };
 
@@ -546,23 +602,26 @@ export class EvolverOrchestrator {
 
       for (const trace of traces.slice(0, limit)) {
         results.push({
-          type: 'trace',
+          type: "trace",
           item: trace,
           match_reason: query.tags
-            ? `Matched tags: ${query.tags.join(', ')}`
+            ? `Matched tags: ${query.tags.join(", ")}`
             : query.outcome_filter
               ? `Outcome: ${query.outcome_filter}`
-              : 'Tag/outcome match',
+              : "Tag/outcome match",
         });
       }
     }
 
     // Sort by similarity score if available, otherwise by type (principles first)
     results.sort((a, b) => {
-      if (a.similarity_score !== undefined && b.similarity_score !== undefined) {
+      if (
+        a.similarity_score !== undefined &&
+        b.similarity_score !== undefined
+      ) {
         return b.similarity_score - a.similarity_score;
       }
-      return a.type === 'principle' && b.type === 'trace' ? -1 : 1;
+      return a.type === "principle" && b.type === "trace" ? -1 : 1;
     });
 
     // Apply overall limit
@@ -571,7 +630,9 @@ export class EvolverOrchestrator {
     const queryTimeMs = Date.now() - startTime;
 
     if (this.config.verbose) {
-      console.error(`[EvolverOrchestrator] Search completed in ${queryTimeMs}ms, found ${limitedResults.length} results`);
+      console.error(
+        `[EvolverOrchestrator] Search completed in ${queryTimeMs}ms, found ${limitedResults.length} results`,
+      );
     }
 
     return {
@@ -587,13 +648,17 @@ export class EvolverOrchestrator {
   startSession(
     taskDescription: string,
     problemDescription: string,
-    options?: { sessionId?: string; modelUsed?: string; agentId?: string }
+    options?: { sessionId?: string; modelUsed?: string; agentId?: string },
   ): LogSession {
     if (this.config.verbose) {
-      console.error('[EvolverOrchestrator] Starting session');
+      console.error("[EvolverOrchestrator] Starting session");
     }
 
-    return this.logger.startSession(taskDescription, problemDescription, options);
+    return this.logger.startSession(
+      taskDescription,
+      problemDescription,
+      options,
+    );
   }
 
   /**
@@ -601,25 +666,32 @@ export class EvolverOrchestrator {
    */
   endSession(
     finalAnswer: string,
-    outcome: { status: 'success' | 'failure' | 'partial'; score: number; explanation?: string },
-    options?: { tags?: string[]; context?: Record<string, unknown> }
+    outcome: {
+      status: "success" | "failure" | "partial";
+      score: number;
+      explanation?: string;
+    },
+    options?: { tags?: string[]; context?: Record<string, unknown> },
   ): Trace {
     if (this.config.verbose) {
-      console.error('[EvolverOrchestrator] Ending session');
+      console.error("[EvolverOrchestrator] Ending session");
     }
 
     const trace = this.logger.endSession(finalAnswer, outcome, options);
 
     // Update principle usage statistics if principles were used
     if (this.currentContext && this.currentContext.principles.length > 0) {
-      const wasSuccessful = outcome.status === 'success';
+      const wasSuccessful = outcome.status === "success";
 
       for (const principle of this.currentContext.principles) {
         try {
           this.storage.recordUsage(principle.id, trace.id, wasSuccessful);
         } catch (error) {
           if (this.config.verbose) {
-            console.error(`[EvolverOrchestrator] Failed to record usage for principle ${principle.id}:`, error);
+            console.error(
+              `[EvolverOrchestrator] Failed to record usage for principle ${principle.id}:`,
+              error,
+            );
           }
         }
       }
@@ -638,7 +710,7 @@ export class EvolverOrchestrator {
     tool: string,
     input: Record<string, unknown>,
     output: unknown,
-    options?: { timestamp?: string; durationMs?: number }
+    options?: { timestamp?: string; durationMs?: number },
   ): void {
     this.logger.logToolCall(tool, input, output, options);
   }
@@ -692,7 +764,7 @@ export class EvolverOrchestrator {
    * Get orchestrator statistics
    */
   getStats(): {
-    expbase: ReturnType<ExpBaseStorage['getStats']>;
+    expbase: ReturnType<ExpBaseStorage["getStats"]>;
     context: SessionContext | null;
     contextFilePath: string;
   } {

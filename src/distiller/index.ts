@@ -4,20 +4,20 @@
  * Provides offline distillation functionality for extracting principles from traces
  */
 
-export { Distiller, type DistillerConfig } from './distiller.js';
+export { Distiller, type DistillerConfig } from "./distiller.js";
 export {
+  cosineSimilarity,
+  type EmbeddingConfig,
+  findSimilarPrinciples,
   generateEmbedding,
   generateEmbeddings,
-  cosineSimilarity,
-  findSimilarPrinciples,
   textSimilarity,
-  type EmbeddingConfig,
-} from './embeddings.js';
+} from "./embeddings.js";
 export {
-  DISTILLATION_SYSTEM_PROMPT,
-  DISTILLATION_USER_PROMPT_TEMPLATE,
   BATCH_DISTILLATION_PROMPT,
   DEDUPLICATION_PROMPT,
+  DISTILLATION_SYSTEM_PROMPT,
+  DISTILLATION_USER_PROMPT_TEMPLATE,
   PRINCIPLE_REFINEMENT_PROMPT,
-} from './prompts.js';
+} from "./prompts.js";
 

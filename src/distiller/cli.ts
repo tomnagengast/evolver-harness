@@ -11,11 +11,11 @@
  * - stats - Show experience base statistics
  */
 
-import { parseArgs } from 'node:util';
-import { resolve } from 'node:path';
-import { ExpBaseStorage } from '../storage/expbase.js';
-import { Distiller } from './distiller.js';
-import { calculatePrincipleScore } from '../types.js';
+import { resolve } from "node:path";
+import { parseArgs } from "node:util";
+import { ExpBaseStorage } from "../storage/expbase.js";
+import { calculatePrincipleScore } from "../types.js";
+import { Distiller } from "./distiller.js";
 
 /**
  * CLI configuration
@@ -27,7 +27,7 @@ interface CLIConfig {
   openaiApiKey?: string;
   model?: string;
   similarityThreshold?: number;
-  embeddingProvider?: 'openai' | 'mock';
+  embeddingProvider?: "openai" | "mock";
 }
 
 /**
@@ -40,16 +40,16 @@ function parseCliArgs(): {
 } {
   const { values, positionals } = parseArgs({
     options: {
-      db: { type: 'string', short: 'd' },
-      verbose: { type: 'boolean', short: 'v', default: false },
-      'anthropic-key': { type: 'string' },
-      'openai-key': { type: 'string' },
-      model: { type: 'string', short: 'm' },
-      threshold: { type: 'string', short: 't' },
-      'min-usage': { type: 'string' },
-      'similarity-threshold': { type: 'string', short: 's' },
-      'embedding-provider': { type: 'string', short: 'e' },
-      help: { type: 'boolean', short: 'h' },
+      db: { type: "string", short: "d" },
+      verbose: { type: "boolean", short: "v", default: false },
+      "anthropic-key": { type: "string" },
+      "openai-key": { type: "string" },
+      model: { type: "string", short: "m" },
+      threshold: { type: "string", short: "t" },
+      "min-usage": { type: "string" },
+      "similarity-threshold": { type: "string", short: "s" },
+      "embedding-provider": { type: "string", short: "e" },
+      help: { type: "boolean", short: "h" },
     },
     allowPositionals: true,
   });
@@ -59,33 +59,36 @@ function parseCliArgs(): {
     process.exit(0);
   }
 
-  const command = positionals[0] || 'help';
+  const command = positionals[0] || "help";
   const args = positionals.slice(1);
 
   // Determine database path
   const dbPath =
     values.db ||
     process.env.EXPBASE_DB_PATH ||
-    resolve(process.cwd(), 'expbase.db');
+    resolve(process.cwd(), "expbase.db");
 
   const config: CLIConfig = {
     dbPath,
     verbose: values.verbose || false,
-    anthropicApiKey: values['anthropic-key'] as string | undefined,
-    openaiApiKey: values['openai-key'] as string | undefined,
+    anthropicApiKey: values["anthropic-key"] as string | undefined,
+    openaiApiKey: values["openai-key"] as string | undefined,
     model: values.model as string | undefined,
-    similarityThreshold: values['similarity-threshold']
-      ? parseFloat(values['similarity-threshold'] as string)
+    similarityThreshold: values["similarity-threshold"]
+      ? Number.parseFloat(values["similarity-threshold"] as string)
       : undefined,
-    embeddingProvider: values['embedding-provider'] as 'openai' | 'mock' | undefined,
+    embeddingProvider: values["embedding-provider"] as
+      | "openai"
+      | "mock"
+      | undefined,
   };
 
   // Store parsed values for commands
   (config as any).threshold = values.threshold
-    ? parseFloat(values.threshold as string)
+    ? Number.parseFloat(values.threshold as string)
     : undefined;
-  (config as any).minUsage = values['min-usage']
-    ? parseInt(values['min-usage'] as string, 10)
+  (config as any).minUsage = values["min-usage"]
+    ? Number.parseInt(values["min-usage"] as string, 10)
     : undefined;
 
   return { command, args, config };
@@ -153,10 +156,10 @@ ENVIRONMENT VARIABLES:
  * Run distill command
  */
 async function runDistill(args: string[], config: CLIConfig): Promise<void> {
-  const count = args[0] ? parseInt(args[0], 10) : 10;
+  const count = args[0] ? Number.parseInt(args[0], 10) : 10;
 
-  if (isNaN(count) || count <= 0) {
-    console.error('Error: count must be a positive number');
+  if (Number.isNaN(count) || count <= 0) {
+    console.error("Error: count must be a positive number");
     process.exit(1);
   }
 
@@ -170,7 +173,7 @@ async function runDistill(args: string[], config: CLIConfig): Promise<void> {
     model: config.model,
     similarityThreshold: config.similarityThreshold,
     embeddingConfig: {
-      provider: config.embeddingProvider || 'openai',
+      provider: config.embeddingProvider || "openai",
       apiKey: config.openaiApiKey,
     },
     verbose: config.verbose,
@@ -179,7 +182,7 @@ async function runDistill(args: string[], config: CLIConfig): Promise<void> {
   try {
     const result = await distiller.distillRecent(count);
 
-    console.log('\n=== Distillation Complete ===\n');
+    console.log("\n=== Distillation Complete ===\n");
     console.log(`Traces processed: ${result.traces_processed}`);
     console.log(`Traces used: ${result.traces_used}`);
     console.log(`New principles: ${result.new_principles.length}`);
@@ -194,28 +197,30 @@ async function runDistill(args: string[], config: CLIConfig): Promise<void> {
     }
 
     if (result.new_principles.length > 0) {
-      console.log('\n=== New Principles ===\n');
+      console.log("\n=== New Principles ===\n");
       for (const principle of result.new_principles) {
         console.log(`- [${principle.id}] ${principle.text}`);
-        console.log(`  Tags: ${principle.tags.join(', ')}`);
+        console.log(`  Tags: ${principle.tags.join(", ")}`);
         console.log(`  Examples: ${principle.examples.length}`);
         console.log();
       }
     }
 
     if (result.updated_principles.length > 0) {
-      console.log('=== Updated Principles ===\n');
+      console.log("=== Updated Principles ===\n");
       for (const principle of result.updated_principles) {
         console.log(`- [${principle.id}] ${principle.text}`);
         console.log(`  Examples: ${principle.examples.length}`);
-        console.log(`  Score: ${calculatePrincipleScore(principle).toFixed(3)}`);
+        console.log(
+          `  Score: ${calculatePrincipleScore(principle).toFixed(3)}`,
+        );
         console.log();
       }
     }
   } catch (error) {
     console.error(
-      'Error:',
-      error instanceof Error ? error.message : String(error)
+      "Error:",
+      error instanceof Error ? error.message : String(error),
     );
     process.exit(1);
   } finally {
@@ -228,13 +233,13 @@ async function runDistill(args: string[], config: CLIConfig): Promise<void> {
  */
 async function runDistillTrace(
   args: string[],
-  config: CLIConfig
+  config: CLIConfig,
 ): Promise<void> {
   const traceId = args[0];
 
   if (!traceId) {
-    console.error('Error: trace ID required');
-    console.error('Usage: distiller distill-trace <trace-id>');
+    console.error("Error: trace ID required");
+    console.error("Usage: distiller distill-trace <trace-id>");
     process.exit(1);
   }
 
@@ -248,7 +253,7 @@ async function runDistillTrace(
     model: config.model,
     similarityThreshold: config.similarityThreshold,
     embeddingConfig: {
-      provider: config.embeddingProvider || 'openai',
+      provider: config.embeddingProvider || "openai",
       apiKey: config.openaiApiKey,
     },
     verbose: config.verbose,
@@ -257,7 +262,7 @@ async function runDistillTrace(
   try {
     const result = await distiller.distillTrace(traceId);
 
-    console.log('\n=== Distillation Complete ===\n');
+    console.log("\n=== Distillation Complete ===\n");
     console.log(`New principles: ${result.new_principles.length}`);
     console.log(`Updated principles: ${result.updated_principles.length}`);
     console.log(`Duration: ${(result.duration_ms / 1000).toFixed(2)}s`);
@@ -270,26 +275,28 @@ async function runDistillTrace(
     }
 
     if (result.new_principles.length > 0) {
-      console.log('\n=== New Principles ===\n');
+      console.log("\n=== New Principles ===\n");
       for (const principle of result.new_principles) {
         console.log(`- [${principle.id}] ${principle.text}`);
-        console.log(`  Tags: ${principle.tags.join(', ')}`);
+        console.log(`  Tags: ${principle.tags.join(", ")}`);
         console.log();
       }
     }
 
     if (result.updated_principles.length > 0) {
-      console.log('=== Updated Principles ===\n');
+      console.log("=== Updated Principles ===\n");
       for (const principle of result.updated_principles) {
         console.log(`- [${principle.id}] ${principle.text}`);
-        console.log(`  Score: ${calculatePrincipleScore(principle).toFixed(3)}`);
+        console.log(
+          `  Score: ${calculatePrincipleScore(principle).toFixed(3)}`,
+        );
         console.log();
       }
     }
   } catch (error) {
     console.error(
-      'Error:',
-      error instanceof Error ? error.message : String(error)
+      "Error:",
+      error instanceof Error ? error.message : String(error),
     );
     process.exit(1);
   } finally {
@@ -301,7 +308,7 @@ async function runDistillTrace(
  * Run dedupe command
  */
 async function runDedupe(config: CLIConfig): Promise<void> {
-  console.log('Running deduplication pass...');
+  console.log("Running deduplication pass...");
   console.log(`Database: ${config.dbPath}`);
   console.log();
 
@@ -311,7 +318,7 @@ async function runDedupe(config: CLIConfig): Promise<void> {
     model: config.model,
     similarityThreshold: config.similarityThreshold,
     embeddingConfig: {
-      provider: config.embeddingProvider || 'openai',
+      provider: config.embeddingProvider || "openai",
       apiKey: config.openaiApiKey,
     },
     verbose: config.verbose,
@@ -320,23 +327,25 @@ async function runDedupe(config: CLIConfig): Promise<void> {
   try {
     const result = await distiller.deduplicatePrinciples();
 
-    console.log('\n=== Deduplication Complete ===\n');
+    console.log("\n=== Deduplication Complete ===\n");
     console.log(`Principles merged: ${result.merged}`);
     console.log(`Principles updated: ${result.updated_principles.length}`);
 
     if (result.updated_principles.length > 0) {
-      console.log('\n=== Updated Principles ===\n');
+      console.log("\n=== Updated Principles ===\n");
       for (const principle of result.updated_principles) {
         console.log(`- [${principle.id}] ${principle.text}`);
         console.log(`  Examples: ${principle.examples.length}`);
-        console.log(`  Score: ${calculatePrincipleScore(principle).toFixed(3)}`);
+        console.log(
+          `  Score: ${calculatePrincipleScore(principle).toFixed(3)}`,
+        );
         console.log();
       }
     }
   } catch (error) {
     console.error(
-      'Error:',
-      error instanceof Error ? error.message : String(error)
+      "Error:",
+      error instanceof Error ? error.message : String(error),
     );
     process.exit(1);
   } finally {
@@ -351,7 +360,7 @@ function runPrune(config: CLIConfig): void {
   const threshold = (config as any).threshold ?? 0.3;
   const minUsage = (config as any).minUsage ?? 10;
 
-  console.log('Pruning low-scoring principles...');
+  console.log("Pruning low-scoring principles...");
   console.log(`Database: ${config.dbPath}`);
   console.log(`Threshold: ${threshold}`);
   console.log(`Minimum usage: ${minUsage}`);
@@ -365,19 +374,19 @@ function runPrune(config: CLIConfig): void {
   try {
     const prunedIds = distiller.prunePrinciples(threshold, minUsage);
 
-    console.log('\n=== Pruning Complete ===\n');
+    console.log("\n=== Pruning Complete ===\n");
     console.log(`Principles removed: ${prunedIds.length}`);
 
     if (prunedIds.length > 0 && config.verbose) {
-      console.log('\nRemoved principle IDs:');
+      console.log("\nRemoved principle IDs:");
       for (const id of prunedIds) {
         console.log(`  - ${id}`);
       }
     }
   } catch (error) {
     console.error(
-      'Error:',
-      error instanceof Error ? error.message : String(error)
+      "Error:",
+      error instanceof Error ? error.message : String(error),
     );
     process.exit(1);
   } finally {
@@ -389,7 +398,7 @@ function runPrune(config: CLIConfig): void {
  * Show experience base statistics
  */
 function runStats(config: CLIConfig): void {
-  console.log('Experience Base Statistics');
+  console.log("Experience Base Statistics");
   console.log(`Database: ${config.dbPath}`);
   console.log();
 
@@ -398,25 +407,27 @@ function runStats(config: CLIConfig): void {
   try {
     const stats = storage.getStats();
 
-    console.log('=== Overview ===\n');
+    console.log("=== Overview ===\n");
     console.log(`Principles: ${stats.principle_count}`);
     console.log(`Traces: ${stats.trace_count}`);
-    console.log(`Average principle score: ${stats.avg_principle_score.toFixed(3)}`);
+    console.log(
+      `Average principle score: ${stats.avg_principle_score.toFixed(3)}`,
+    );
 
     if (stats.trace_success_rate !== undefined) {
       console.log(
-        `Trace success rate: ${(stats.trace_success_rate * 100).toFixed(1)}%`
+        `Trace success rate: ${(stats.trace_success_rate * 100).toFixed(1)}%`,
       );
     }
 
     if (stats.avg_trace_duration_ms !== undefined) {
       console.log(
-        `Average trace duration: ${(stats.avg_trace_duration_ms / 1000).toFixed(2)}s`
+        `Average trace duration: ${(stats.avg_trace_duration_ms / 1000).toFixed(2)}s`,
       );
     }
 
     if (stats.score_distribution) {
-      console.log('\n=== Score Distribution ===\n');
+      console.log("\n=== Score Distribution ===\n");
       console.log(`Min: ${stats.score_distribution.min.toFixed(3)}`);
       console.log(`P25: ${stats.score_distribution.p25.toFixed(3)}`);
       console.log(`Median: ${stats.score_distribution.median.toFixed(3)}`);
@@ -426,32 +437,39 @@ function runStats(config: CLIConfig): void {
     }
 
     if (stats.top_tags && stats.top_tags.length > 0) {
-      console.log('\n=== Top Tags ===\n');
+      console.log("\n=== Top Tags ===\n");
       for (const { tag, count } of stats.top_tags.slice(0, 10)) {
         console.log(`${count.toString().padStart(4)} - ${tag}`);
       }
     }
 
     if (stats.top_principles && stats.top_principles.length > 0) {
-      console.log('\n=== Top Principles ===\n');
-      for (const { principle, score, rank } of stats.top_principles.slice(0, 10)) {
+      console.log("\n=== Top Principles ===\n");
+      for (const { principle, score, rank } of stats.top_principles.slice(
+        0,
+        10,
+      )) {
         console.log(`${rank}. [${score.toFixed(3)}] ${principle.text}`);
         console.log(
-          `   Use: ${principle.use_count}, Success: ${principle.success_count}`
+          `   Use: ${principle.use_count}, Success: ${principle.success_count}`,
         );
         console.log();
       }
     }
 
     if (stats.time_range) {
-      console.log('=== Time Range ===\n');
-      console.log(`Earliest: ${new Date(stats.time_range.earliest).toLocaleString()}`);
-      console.log(`Latest: ${new Date(stats.time_range.latest).toLocaleString()}`);
+      console.log("=== Time Range ===\n");
+      console.log(
+        `Earliest: ${new Date(stats.time_range.earliest).toLocaleString()}`,
+      );
+      console.log(
+        `Latest: ${new Date(stats.time_range.latest).toLocaleString()}`,
+      );
     }
   } catch (error) {
     console.error(
-      'Error:',
-      error instanceof Error ? error.message : String(error)
+      "Error:",
+      error instanceof Error ? error.message : String(error),
     );
     process.exit(1);
   } finally {
@@ -463,7 +481,7 @@ function runStats(config: CLIConfig): void {
  * List all traces
  */
 function runListTraces(config: CLIConfig): void {
-  console.log('All Traces');
+  console.log("All Traces");
   console.log(`Database: ${config.dbPath}`);
   console.log();
 
@@ -478,7 +496,7 @@ function runListTraces(config: CLIConfig): void {
       console.log(`[${trace.id}]`);
       console.log(`  Task: ${trace.task_summary}`);
       console.log(
-        `  Outcome: ${trace.outcome.status} (score: ${trace.outcome.score})`
+        `  Outcome: ${trace.outcome.status} (score: ${trace.outcome.score})`,
       );
       console.log(`  Duration: ${(trace.duration_ms / 1000).toFixed(2)}s`);
       console.log(`  Created: ${new Date(trace.created_at).toLocaleString()}`);
@@ -490,8 +508,8 @@ function runListTraces(config: CLIConfig): void {
     }
   } catch (error) {
     console.error(
-      'Error:',
-      error instanceof Error ? error.message : String(error)
+      "Error:",
+      error instanceof Error ? error.message : String(error),
     );
     process.exit(1);
   } finally {
@@ -503,7 +521,7 @@ function runListTraces(config: CLIConfig): void {
  * List all principles
  */
 function runListPrinciples(config: CLIConfig): void {
-  console.log('All Principles');
+  console.log("All Principles");
   console.log(`Database: ${config.dbPath}`);
   console.log();
 
@@ -518,16 +536,16 @@ function runListPrinciples(config: CLIConfig): void {
       const score = calculatePrincipleScore(principle);
       console.log(`[${principle.id}] ${principle.text}`);
       console.log(
-        `  Score: ${score.toFixed(3)} (use: ${principle.use_count}, success: ${principle.success_count})`
+        `  Score: ${score.toFixed(3)} (use: ${principle.use_count}, success: ${principle.success_count})`,
       );
-      console.log(`  Tags: ${principle.tags.join(', ')}`);
+      console.log(`  Tags: ${principle.tags.join(", ")}`);
       console.log(`  Examples: ${principle.examples.length}`);
       console.log();
     }
   } catch (error) {
     console.error(
-      'Error:',
-      error instanceof Error ? error.message : String(error)
+      "Error:",
+      error instanceof Error ? error.message : String(error),
     );
     process.exit(1);
   } finally {
@@ -542,35 +560,35 @@ async function main(): Promise<void> {
   const { command, args, config } = parseCliArgs();
 
   switch (command) {
-    case 'distill':
+    case "distill":
       await runDistill(args, config);
       break;
 
-    case 'distill-trace':
+    case "distill-trace":
       await runDistillTrace(args, config);
       break;
 
-    case 'dedupe':
+    case "dedupe":
       await runDedupe(config);
       break;
 
-    case 'prune':
+    case "prune":
       runPrune(config);
       break;
 
-    case 'stats':
+    case "stats":
       runStats(config);
       break;
 
-    case 'list-traces':
+    case "list-traces":
       runListTraces(config);
       break;
 
-    case 'list-principles':
+    case "list-principles":
       runListPrinciples(config);
       break;
 
-    case 'help':
+    case "help":
       printHelp();
       break;
 
@@ -583,7 +601,10 @@ async function main(): Promise<void> {
 
 // Run CLI
 main().catch((error) => {
-  console.error('Fatal error:', error instanceof Error ? error.message : String(error));
+  console.error(
+    "Fatal error:",
+    error instanceof Error ? error.message : String(error),
+  );
   process.exit(1);
 });
 

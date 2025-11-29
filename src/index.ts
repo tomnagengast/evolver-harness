@@ -4,42 +4,41 @@
  * Main exports for the evolver-harness package.
  */
 
-// Types
-export * from './types.js';
-
-// Storage
-export { ExpBaseStorage } from './storage/expbase.js';
+// Distillation
+export { Distiller, type DistillerConfig } from "./distiller/distiller.js";
+export {
+  cosineSimilarity,
+  type EmbeddingConfig,
+  findSimilarPrinciples,
+  generateEmbedding,
+} from "./distiller/embeddings.js";
 
 // Logging
-export { TraceLogger, SessionStateManager, type LogSession } from './logger/trace-logger.js';
-
-// Distillation
-export { Distiller, type DistillerConfig } from './distiller/distiller.js';
 export {
-  generateEmbedding,
-  cosineSimilarity,
-  findSimilarPrinciples,
-  type EmbeddingConfig,
-} from './distiller/embeddings.js';
-
-// Retrieval
-export { ExperienceRetriever } from './retriever/retriever.js';
-
+  type LogSession,
+  SessionStateManager,
+  TraceLogger,
+} from "./logger/trace-logger.js";
+export {
+  DEFAULT_SEARCH_CONFIG,
+  EVOLVER_SYSTEM_PROMPT,
+  EVOLVER_TOOL_SCHEMAS,
+  formatPrincipleForDisplay,
+  formatTraceForDisplay,
+  LOG_TRAJECTORY_TOOL_SCHEMA,
+  SEARCH_EXPERIENCE_TOOL_SCHEMA,
+} from "./orchestrator/contract.js";
 // Orchestration
 export {
   EvolverOrchestrator,
   type OrchestratorConfig,
-  type SessionContext,
   type SearchExperienceResult,
-} from './orchestrator/orchestrator.js';
+  type SessionContext,
+} from "./orchestrator/orchestrator.js";
 
-export {
-  EVOLVER_SYSTEM_PROMPT,
-  EVOLVER_TOOL_SCHEMAS,
-  SEARCH_EXPERIENCE_TOOL_SCHEMA,
-  LOG_TRAJECTORY_TOOL_SCHEMA,
-  DEFAULT_SEARCH_CONFIG,
-  formatPrincipleForDisplay,
-  formatTraceForDisplay,
-} from './orchestrator/contract.js';
-
+// Retrieval
+export { ExperienceRetriever } from "./retriever/retriever.js";
+// Storage
+export { ExpBaseStorage } from "./storage/expbase.js";
+// Types
+export * from "./types.js";
