@@ -2,11 +2,11 @@
  * SQLite-based ExpBase Storage Layer
  *
  * Provides persistent storage for principles, traces, and usage analytics
- * using better-sqlite3 for synchronous SQLite operations.
+ * using Bun's native SQLite API for synchronous operations.
  */
 
+import { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
-import Database from "better-sqlite3";
 import {
   type ExperienceBaseStats,
   type NewPrinciple,
@@ -53,7 +53,7 @@ export interface ExpBaseConfig {
  * Manages principles, traces, and usage analytics with efficient querying and scoring.
  */
 export class ExpBaseStorage {
-  private db: Database.Database;
+  private db: Database;
   private config: ExpBaseConfig;
 
   constructor(config: ExpBaseConfig) {
@@ -64,18 +64,16 @@ export class ExpBaseStorage {
     };
 
     try {
-      this.db = new Database(this.config.dbPath, {
-        verbose: this.config.verbose ? console.log : undefined,
-      });
+      this.db = new Database(this.config.dbPath);
 
       // Enable WAL mode for better concurrency
       if (this.config.enableWAL) {
-        this.db.pragma("journal_mode = WAL");
+        this.db.exec("PRAGMA journal_mode = WAL");
       }
 
       // Optimize for performance
-      this.db.pragma("synchronous = NORMAL");
-      this.db.pragma("foreign_keys = ON");
+      this.db.exec("PRAGMA synchronous = NORMAL");
+      this.db.exec("PRAGMA foreign_keys = ON");
 
       this.initDatabase();
     } catch (error) {
@@ -206,33 +204,28 @@ export class ExpBaseStorage {
         version: principle.version ?? 1,
       };
 
-      const stmt = this.db.prepare(`
+      const stmt = this.db.query(`
         INSERT INTO principles (
           id, text, triples, tags, examples, use_count, success_count,
           embedding, created_at, updated_at, confidence, source, version
-        ) VALUES (
-          @id, @text, @triples, @tags, @examples, @use_count, @success_count,
-          @embedding, @created_at, @updated_at, @confidence, @source, @version
-        )
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      stmt.run({
-        id: newPrinciple.id,
-        text: newPrinciple.text,
-        triples: JSON.stringify(newPrinciple.triples),
-        tags: JSON.stringify(newPrinciple.tags),
-        examples: JSON.stringify(newPrinciple.examples),
-        use_count: newPrinciple.use_count,
-        success_count: newPrinciple.success_count,
-        embedding: newPrinciple.embedding
-          ? JSON.stringify(newPrinciple.embedding)
-          : null,
-        created_at: newPrinciple.created_at,
-        updated_at: newPrinciple.updated_at,
-        confidence: newPrinciple.confidence ?? null,
-        source: newPrinciple.source ?? null,
-        version: newPrinciple.version,
-      });
+      stmt.run(
+        newPrinciple.id,
+        newPrinciple.text,
+        JSON.stringify(newPrinciple.triples),
+        JSON.stringify(newPrinciple.tags),
+        JSON.stringify(newPrinciple.examples),
+        newPrinciple.use_count,
+        newPrinciple.success_count,
+        newPrinciple.embedding ? JSON.stringify(newPrinciple.embedding) : null,
+        newPrinciple.created_at,
+        newPrinciple.updated_at,
+        newPrinciple.confidence ?? null,
+        newPrinciple.source ?? null,
+        newPrinciple.version ?? 1,
+      );
 
       return newPrinciple;
     } catch (error) {
@@ -260,36 +253,28 @@ export class ExpBaseStorage {
         updated_at: new Date().toISOString(),
       };
 
-      const stmt = this.db.prepare(`
+      const stmt = this.db.query(`
         UPDATE principles SET
-          text = @text,
-          triples = @triples,
-          tags = @tags,
-          examples = @examples,
-          use_count = @use_count,
-          success_count = @success_count,
-          embedding = @embedding,
-          updated_at = @updated_at,
-          confidence = @confidence,
-          source = @source,
-          version = @version
-        WHERE id = @id
+          text = ?, triples = ?, tags = ?, examples = ?, use_count = ?,
+          success_count = ?, embedding = ?, updated_at = ?, confidence = ?,
+          source = ?, version = ?
+        WHERE id = ?
       `);
 
-      stmt.run({
-        id: updated.id,
-        text: updated.text,
-        triples: JSON.stringify(updated.triples),
-        tags: JSON.stringify(updated.tags),
-        examples: JSON.stringify(updated.examples),
-        use_count: updated.use_count,
-        success_count: updated.success_count,
-        embedding: updated.embedding ? JSON.stringify(updated.embedding) : null,
-        updated_at: updated.updated_at,
-        confidence: updated.confidence ?? null,
-        source: updated.source ?? null,
-        version: updated.version ?? 1,
-      });
+      stmt.run(
+        updated.text,
+        JSON.stringify(updated.triples),
+        JSON.stringify(updated.tags),
+        JSON.stringify(updated.examples),
+        updated.use_count,
+        updated.success_count,
+        updated.embedding ? JSON.stringify(updated.embedding) : null,
+        updated.updated_at,
+        updated.confidence ?? null,
+        updated.source ?? null,
+        updated.version ?? 1,
+        updated.id,
+      );
 
       return updated;
     } catch (error) {
@@ -304,8 +289,8 @@ export class ExpBaseStorage {
    */
   getPrinciple(id: string): Principle | null {
     try {
-      const stmt = this.db.prepare("SELECT * FROM principles WHERE id = ?");
-      const row = stmt.get(id) as any;
+      const stmt = this.db.query("SELECT * FROM principles WHERE id = ?");
+      const row = stmt.get(id) as Record<string, unknown> | null;
 
       if (!row) {
         return null;
@@ -324,10 +309,10 @@ export class ExpBaseStorage {
    */
   getAllPrinciples(): Principle[] {
     try {
-      const stmt = this.db.prepare(
+      const stmt = this.db.query(
         "SELECT * FROM principles ORDER BY updated_at DESC",
       );
-      const rows = stmt.all() as any[];
+      const rows = stmt.all() as Record<string, unknown>[];
       return rows.map((row) => this.deserializePrinciple(row));
     } catch (error) {
       throw new Error(
@@ -341,7 +326,7 @@ export class ExpBaseStorage {
    */
   deletePrinciple(id: string): boolean {
     try {
-      const stmt = this.db.prepare("DELETE FROM principles WHERE id = ?");
+      const stmt = this.db.query("DELETE FROM principles WHERE id = ?");
       const result = stmt.run(id);
       return result.changes > 0;
     } catch (error) {
@@ -377,35 +362,31 @@ export class ExpBaseStorage {
         context: trace.context,
       };
 
-      const stmt = this.db.prepare(`
+      const stmt = this.db.query(`
         INSERT INTO traces (
           id, task_summary, problem_description, tool_calls, intermediate_thoughts,
           final_answer, outcome, duration_ms, model_used, session_id, triples,
           tags, created_at, agent_id, context
-        ) VALUES (
-          @id, @task_summary, @problem_description, @tool_calls, @intermediate_thoughts,
-          @final_answer, @outcome, @duration_ms, @model_used, @session_id, @triples,
-          @tags, @created_at, @agent_id, @context
-        )
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      stmt.run({
-        id: newTrace.id,
-        task_summary: newTrace.task_summary,
-        problem_description: newTrace.problem_description,
-        tool_calls: JSON.stringify(newTrace.tool_calls),
-        intermediate_thoughts: JSON.stringify(newTrace.intermediate_thoughts),
-        final_answer: newTrace.final_answer,
-        outcome: JSON.stringify(newTrace.outcome),
-        duration_ms: newTrace.duration_ms,
-        model_used: newTrace.model_used,
-        session_id: newTrace.session_id,
-        triples: newTrace.triples ? JSON.stringify(newTrace.triples) : null,
-        tags: newTrace.tags ? JSON.stringify(newTrace.tags) : null,
-        created_at: newTrace.created_at,
-        agent_id: newTrace.agent_id ?? null,
-        context: newTrace.context ? JSON.stringify(newTrace.context) : null,
-      });
+      stmt.run(
+        newTrace.id,
+        newTrace.task_summary,
+        newTrace.problem_description,
+        JSON.stringify(newTrace.tool_calls),
+        JSON.stringify(newTrace.intermediate_thoughts),
+        newTrace.final_answer,
+        JSON.stringify(newTrace.outcome),
+        newTrace.duration_ms,
+        newTrace.model_used,
+        newTrace.session_id,
+        newTrace.triples ? JSON.stringify(newTrace.triples) : null,
+        newTrace.tags ? JSON.stringify(newTrace.tags) : null,
+        newTrace.created_at,
+        newTrace.agent_id ?? null,
+        newTrace.context ? JSON.stringify(newTrace.context) : null,
+      );
 
       return newTrace;
     } catch (error) {
@@ -420,8 +401,8 @@ export class ExpBaseStorage {
    */
   getTrace(id: string): Trace | null {
     try {
-      const stmt = this.db.prepare("SELECT * FROM traces WHERE id = ?");
-      const row = stmt.get(id) as any;
+      const stmt = this.db.query("SELECT * FROM traces WHERE id = ?");
+      const row = stmt.get(id) as Record<string, unknown> | null;
 
       if (!row) {
         return null;
@@ -440,10 +421,10 @@ export class ExpBaseStorage {
    */
   getAllTraces(): Trace[] {
     try {
-      const stmt = this.db.prepare(
+      const stmt = this.db.query(
         "SELECT * FROM traces ORDER BY created_at DESC",
       );
-      const rows = stmt.all() as any[];
+      const rows = stmt.all() as Record<string, unknown>[];
       return rows.map((row) => this.deserializeTrace(row));
     } catch (error) {
       throw new Error(
@@ -457,10 +438,10 @@ export class ExpBaseStorage {
    */
   getTracesBySession(sessionId: string): Trace[] {
     try {
-      const stmt = this.db.prepare(
+      const stmt = this.db.query(
         "SELECT * FROM traces WHERE session_id = ? ORDER BY created_at ASC",
       );
-      const rows = stmt.all(sessionId) as any[];
+      const rows = stmt.all(sessionId) as Record<string, unknown>[];
       return rows.map((row) => this.deserializeTrace(row));
     } catch (error) {
       throw new Error(
@@ -475,7 +456,7 @@ export class ExpBaseStorage {
   searchPrinciples(query: SearchQuery): Principle[] {
     try {
       let sql = "SELECT * FROM principles WHERE 1=1";
-      const params: any[] = [];
+      const params: (string | number)[] = [];
 
       // Filter by tags (ANY match)
       if (query.tags && query.tags.length > 0) {
@@ -513,8 +494,8 @@ export class ExpBaseStorage {
         params.push(query.limit);
       }
 
-      const stmt = this.db.prepare(sql);
-      const rows = stmt.all(...params) as any[];
+      const stmt = this.db.query(sql);
+      const rows = stmt.all(...params) as Record<string, unknown>[];
       let principles = rows.map((row) => this.deserializePrinciple(row));
 
       // Remove embeddings if not requested
@@ -536,7 +517,7 @@ export class ExpBaseStorage {
   searchTraces(query: SearchQuery): Trace[] {
     try {
       let sql = "SELECT * FROM traces WHERE 1=1";
-      const params: any[] = [];
+      const params: (string | number)[] = [];
 
       // Filter by tags (ANY match)
       if (query.tags && query.tags.length > 0) {
@@ -581,8 +562,8 @@ export class ExpBaseStorage {
         params.push(query.limit);
       }
 
-      const stmt = this.db.prepare(sql);
-      const rows = stmt.all(...params) as any[];
+      const stmt = this.db.query(sql);
+      const rows = stmt.all(...params) as Record<string, unknown>[];
       return rows.map((row) => this.deserializeTrace(row));
     } catch (error) {
       throw new Error(
@@ -599,50 +580,50 @@ export class ExpBaseStorage {
     traceId: string | undefined,
     wasSuccessful: boolean,
   ): PrincipleUsageEvent {
-    const transaction = this.db.transaction(() => {
-      try {
-        // Create usage event
-        const event: PrincipleUsageEvent = {
-          id: randomUUID(),
-          principle_id: principleId,
-          trace_id: traceId,
-          was_successful: wasSuccessful,
-          created_at: new Date().toISOString(),
-        };
+    const runTransaction = this.db.transaction(() => {
+      // Create usage event
+      const event: PrincipleUsageEvent = {
+        id: randomUUID(),
+        principle_id: principleId,
+        trace_id: traceId,
+        was_successful: wasSuccessful,
+        created_at: new Date().toISOString(),
+      };
 
-        const usageStmt = this.db.prepare(`
-          INSERT INTO principle_usage (id, principle_id, trace_id, was_successful, created_at)
-          VALUES (@id, @principle_id, @trace_id, @was_successful, @created_at)
-        `);
+      const usageStmt = this.db.query(`
+        INSERT INTO principle_usage (id, principle_id, trace_id, was_successful, created_at)
+        VALUES (?, ?, ?, ?, ?)
+      `);
 
-        usageStmt.run({
-          id: event.id,
-          principle_id: event.principle_id,
-          trace_id: event.trace_id ?? null,
-          was_successful: wasSuccessful ? 1 : 0,
-          created_at: event.created_at,
-        });
+      usageStmt.run(
+        event.id,
+        event.principle_id,
+        event.trace_id ?? null,
+        wasSuccessful ? 1 : 0,
+        event.created_at,
+      );
 
-        // Update principle counters
-        const updateStmt = this.db.prepare(`
-          UPDATE principles
-          SET use_count = use_count + 1,
-              success_count = success_count + ?,
-              updated_at = ?
-          WHERE id = ?
-        `);
+      // Update principle counters
+      const updateStmt = this.db.query(`
+        UPDATE principles
+        SET use_count = use_count + 1,
+            success_count = success_count + ?,
+            updated_at = ?
+        WHERE id = ?
+      `);
 
-        updateStmt.run(wasSuccessful ? 1 : 0, event.created_at, principleId);
+      updateStmt.run(wasSuccessful ? 1 : 0, event.created_at, principleId);
 
-        return event;
-      } catch (error) {
-        throw new Error(
-          `Failed to record usage: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
+      return event;
     });
 
-    return transaction();
+    try {
+      return runTransaction();
+    } catch (error) {
+      throw new Error(
+        `Failed to record usage: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   /**
@@ -723,15 +704,15 @@ export class ExpBaseStorage {
   getStats(): ExperienceBaseStats {
     try {
       // Count principles and traces
-      const principleCountStmt = this.db.prepare(
+      const principleCountStmt = this.db.query(
         "SELECT COUNT(*) as count FROM principles",
       );
-      const traceCountStmt = this.db.prepare(
+      const traceCountStmt = this.db.query(
         "SELECT COUNT(*) as count FROM traces",
       );
 
-      const principleCount = (principleCountStmt.get() as any).count;
-      const traceCount = (traceCountStmt.get() as any).count;
+      const principleCount = (principleCountStmt.get() as { count: number }).count;
+      const traceCount = (traceCountStmt.get() as { count: number }).count;
 
       // Get all principles for score calculation
       const principles = this.getAllPrinciples();
@@ -830,17 +811,17 @@ export class ExpBaseStorage {
    */
   getPrincipleUsageHistory(principleId: string): PrincipleUsageEvent[] {
     try {
-      const stmt = this.db.prepare(
+      const stmt = this.db.query(
         "SELECT * FROM principle_usage WHERE principle_id = ? ORDER BY created_at DESC",
       );
-      const rows = stmt.all(principleId) as any[];
+      const rows = stmt.all(principleId) as Record<string, unknown>[];
 
       return rows.map((row) => ({
-        id: row.id,
-        principle_id: row.principle_id,
-        trace_id: row.trace_id,
+        id: row.id as string,
+        principle_id: row.principle_id as string,
+        trace_id: row.trace_id as string | undefined,
         was_successful: row.was_successful === 1,
-        created_at: row.created_at,
+        created_at: row.created_at as string,
       }));
     } catch (error) {
       throw new Error(
@@ -863,11 +844,12 @@ export class ExpBaseStorage {
   }
 
   /**
-   * Execute a backup of the database
+   * Execute a backup of the database by serializing to a file
    */
   backup(destinationPath: string): void {
     try {
-      this.db.backup(destinationPath);
+      const data = this.db.serialize();
+      Bun.write(destinationPath, data);
     } catch (error) {
       throw new Error(
         `Failed to backup database: ${error instanceof Error ? error.message : String(error)}`,
@@ -890,41 +872,43 @@ export class ExpBaseStorage {
 
   // Private helper methods
 
-  private deserializePrinciple(row: any): Principle {
+  private deserializePrinciple(row: Record<string, unknown>): Principle {
     return {
-      id: row.id,
-      text: row.text,
-      triples: JSON.parse(row.triples),
-      tags: JSON.parse(row.tags),
-      examples: JSON.parse(row.examples),
-      use_count: row.use_count,
-      success_count: row.success_count,
-      embedding: row.embedding ? JSON.parse(row.embedding) : undefined,
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-      confidence: row.confidence ?? undefined,
-      source: row.source ?? undefined,
-      version: row.version ?? 1,
+      id: row.id as string,
+      text: row.text as string,
+      triples: JSON.parse(row.triples as string),
+      tags: JSON.parse(row.tags as string),
+      examples: JSON.parse(row.examples as string),
+      use_count: row.use_count as number,
+      success_count: row.success_count as number,
+      embedding: row.embedding
+        ? JSON.parse(row.embedding as string)
+        : undefined,
+      created_at: row.created_at as string,
+      updated_at: row.updated_at as string,
+      confidence: (row.confidence as number | null) ?? undefined,
+      source: (row.source as string | null) ?? undefined,
+      version: (row.version as number | null) ?? 1,
     };
   }
 
-  private deserializeTrace(row: any): Trace {
+  private deserializeTrace(row: Record<string, unknown>): Trace {
     return {
-      id: row.id,
-      task_summary: row.task_summary,
-      problem_description: row.problem_description,
-      tool_calls: JSON.parse(row.tool_calls),
-      intermediate_thoughts: JSON.parse(row.intermediate_thoughts),
-      final_answer: row.final_answer,
-      outcome: JSON.parse(row.outcome),
-      duration_ms: row.duration_ms,
-      model_used: row.model_used,
-      session_id: row.session_id,
-      triples: row.triples ? JSON.parse(row.triples) : undefined,
-      tags: row.tags ? JSON.parse(row.tags) : undefined,
-      created_at: row.created_at,
-      agent_id: row.agent_id ?? undefined,
-      context: row.context ? JSON.parse(row.context) : undefined,
+      id: row.id as string,
+      task_summary: row.task_summary as string,
+      problem_description: row.problem_description as string,
+      tool_calls: JSON.parse(row.tool_calls as string),
+      intermediate_thoughts: JSON.parse(row.intermediate_thoughts as string),
+      final_answer: row.final_answer as string,
+      outcome: JSON.parse(row.outcome as string),
+      duration_ms: row.duration_ms as number,
+      model_used: row.model_used as string,
+      session_id: row.session_id as string,
+      triples: row.triples ? JSON.parse(row.triples as string) : undefined,
+      tags: row.tags ? JSON.parse(row.tags as string) : undefined,
+      created_at: row.created_at as string,
+      agent_id: (row.agent_id as string | null) ?? undefined,
+      context: row.context ? JSON.parse(row.context as string) : undefined,
     };
   }
 }
