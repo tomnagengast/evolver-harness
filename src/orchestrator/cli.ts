@@ -3,13 +3,10 @@
  * CLI Wrapper for EvolverOrchestrator
  *
  * Provides command-line interface for:
- * - wrap: Wrap a Claude Code session with experience context
  * - status: Show current session state
- * - sync: Sync principles to CLAUDE.md
  * - search: Search the experience base
  */
 
-import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { SearchQuery } from "../types.js";
@@ -21,7 +18,6 @@ import { EvolverOrchestrator } from "./orchestrator.js";
 interface CliConfig {
   dbPath: string;
   enableEmbeddings: boolean;
-  contextFilePath: string;
   verbose: boolean;
 }
 
@@ -34,9 +30,6 @@ function getConfig(): CliConfig {
       process.env.EVOLVER_DB_PATH ||
       path.join(os.homedir(), ".evolver", "expbase.db"),
     enableEmbeddings: process.env.EVOLVER_ENABLE_EMBEDDINGS === "true",
-    contextFilePath:
-      process.env.EVOLVER_CONTEXT_FILE ||
-      path.join(os.homedir(), ".evolver", "context.md"),
     verbose: process.env.EVOLVER_VERBOSE === "true",
   };
 }
@@ -85,36 +78,15 @@ Evolver Orchestrator CLI
 Usage: evolver-cli <command> [options]
 
 Commands:
-  wrap              Wrap a Claude Code session with experience context
-  status            Show current session state
-  sync              Sync top principles to CLAUDE.md
+  status            Show experience base state
   search            Search the experience base
   help              Show this help message
-
-Wrap Command:
-  evolver-cli wrap --task="Fix the login bug" [--session-id=<id>]
-
-  Options:
-    --task         Task description (required)
-    --session-id   Session ID (optional, auto-generated if not provided)
 
 Status Command:
   evolver-cli status
 
   Shows:
-    - Current session context
-    - Retrieved principles
     - ExpBase statistics
-
-Sync Command:
-  evolver-cli sync [--output=<path>] [--max=<count>] [--min-score=<score>]
-
-  Options:
-    --output       Output file path (default: ./CLAUDE.md)
-    --max          Maximum number of principles (default: 20)
-    --min-score    Minimum principle score (default: 0.6)
-
-  Syncs top principles to CLAUDE.md for project-specific guidance.
 
 Search Command:
   evolver-cli search --query="authentication bug" [options]
@@ -132,9 +104,6 @@ Environment Variables:
   EVOLVER_DB_PATH              Path to ExpBase database
                                (default: ~/.evolver/expbase.db)
 
-  EVOLVER_CONTEXT_FILE         Path to context injection file
-                               (default: ~/.evolver/context.md)
-
   EVOLVER_ENABLE_EMBEDDINGS    Enable semantic search (true/false)
                                (default: false)
 
@@ -144,14 +113,8 @@ Environment Variables:
   OPENAI_API_KEY               OpenAI API key (required for embeddings)
 
 Examples:
-  # Wrap a session
-  evolver-cli wrap --task="Fix authentication bug in OAuth flow"
-
   # Search for relevant principles
   evolver-cli search --query="react performance" --mode=principles --limit=5
-
-  # Sync principles to CLAUDE.md
-  evolver-cli sync --output=./CLAUDE.md --max=20 --min-score=0.7
 
   # Check status
   evolver-cli status
@@ -159,49 +122,10 @@ Examples:
 }
 
 /**
- * Wrap command - prepare context for a Claude Code session
- */
-async function wrapCommand(
-  orchestrator: EvolverOrchestrator,
-  options: Record<string, string | boolean>,
-): Promise<void> {
-  if (!options.task || typeof options.task !== "string") {
-    console.error("Error: --task is required");
-    process.exit(1);
-  }
-
-  const sessionId =
-    typeof options["session-id"] === "string"
-      ? options["session-id"]
-      : undefined;
-
-  console.error(`[Wrap] Preparing session context for task: ${options.task}`);
-
-  const context = await orchestrator.wrapSession(options.task, { sessionId });
-
-  console.log(
-    JSON.stringify(
-      {
-        status: "success",
-        sessionId: context.sessionId,
-        taskDescription: context.taskDescription,
-        principlesRetrieved: context.principles.length,
-        contextFile: orchestrator.getStats().contextFilePath,
-        timestamp: context.timestamp,
-      },
-      null,
-      2,
-    ),
-  );
-}
-
-/**
- * Status command - show current session state
+ * Status command - show experience base state
  */
 async function statusCommand(orchestrator: EvolverOrchestrator): Promise<void> {
   const stats = orchestrator.getStats();
-  const context = orchestrator.getCurrentContext();
-  const session = orchestrator.getCurrentSession();
 
   console.log(
     JSON.stringify(
@@ -213,102 +137,6 @@ async function statusCommand(orchestrator: EvolverOrchestrator): Promise<void> {
           avgPrincipleScore: stats.expbase.avg_principle_score.toFixed(3),
           topTags: stats.expbase.top_tags?.slice(0, 5),
         },
-        currentContext: context
-          ? {
-              sessionId: context.sessionId,
-              taskDescription: context.taskDescription,
-              principlesRetrieved: context.principles.length,
-              timestamp: context.timestamp,
-            }
-          : null,
-        currentSession: session
-          ? {
-              sessionId: session.id,
-              taskSummary: session.taskSummary,
-              toolCalls: session.toolCalls.length,
-              thoughts: session.intermediateThoughts.length,
-              modelUsed: session.modelUsed,
-            }
-          : null,
-        contextFile: stats.contextFilePath,
-        contextFileExists: fs.existsSync(stats.contextFilePath),
-      },
-      null,
-      2,
-    ),
-  );
-}
-
-/**
- * Sync command - sync principles to CLAUDE.md
- */
-async function syncCommand(
-  orchestrator: EvolverOrchestrator,
-  options: Record<string, string | boolean>,
-): Promise<void> {
-  const outputPath =
-    typeof options.output === "string" ? options.output : "./CLAUDE.md";
-  const maxPrinciples =
-    typeof options.max === "string" ? Number.parseInt(options.max, 10) : 20;
-  const minScore =
-    typeof options["min-score"] === "string"
-      ? Number.parseFloat(options["min-score"])
-      : 0.6;
-
-  console.error(`[Sync] Syncing principles to ${outputPath}`);
-  console.error(`[Sync] Max: ${maxPrinciples}, Min score: ${minScore}`);
-
-  // Get top principles
-  const principleScores = orchestrator.getStorage().getPrincipleScores();
-
-  // Filter by score and take top N
-  const topPrinciples = principleScores
-    .filter((ps) => ps.score >= minScore)
-    .slice(0, maxPrinciples)
-    .map((ps) => ps.principle);
-
-  console.error(
-    `[Sync] Found ${topPrinciples.length} principles meeting criteria`,
-  );
-
-  // Build CLAUDE.md content
-  const lines: string[] = [];
-
-  lines.push("# CLAUDE.md");
-  lines.push("");
-  lines.push("## Learned Principles");
-  lines.push("");
-  lines.push(
-    `The following ${topPrinciples.length} principles have been learned from experience and should guide your approach:`,
-  );
-  lines.push("");
-
-  for (let i = 0; i < topPrinciples.length; i++) {
-    const principle = topPrinciples[i];
-    const score = (principle.success_count + 1) / (principle.use_count + 2);
-
-    lines.push(`### ${i + 1}. ${principle.tags.join(" / ")}`);
-    lines.push("");
-    lines.push(principle.text);
-    lines.push("");
-    lines.push(
-      `**Confidence**: ${score.toFixed(3)} (${principle.use_count} uses, ${principle.success_count} successes)`,
-    );
-    lines.push("");
-  }
-
-  // Write to file
-  const content = lines.join("\n");
-  fs.writeFileSync(outputPath, content, "utf-8");
-
-  console.log(
-    JSON.stringify(
-      {
-        status: "success",
-        outputPath,
-        principlesSynced: topPrinciples.length,
-        minScore,
-        maxPrinciples,
       },
       null,
       2,
@@ -431,7 +259,6 @@ async function main(): Promise<void> {
   const orchestrator = new EvolverOrchestrator({
     dbPath: config.dbPath,
     enableEmbeddings: config.enableEmbeddings,
-    contextFilePath: config.contextFilePath,
     verbose: config.verbose,
     embeddingConfig: {
       provider: config.enableEmbeddings ? "openai" : "mock",
@@ -440,16 +267,8 @@ async function main(): Promise<void> {
 
   try {
     switch (command) {
-      case "wrap":
-        await wrapCommand(orchestrator, options);
-        break;
-
       case "status":
         await statusCommand(orchestrator);
-        break;
-
-      case "sync":
-        await syncCommand(orchestrator, options);
         break;
 
       case "search":

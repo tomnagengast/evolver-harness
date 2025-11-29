@@ -10,10 +10,10 @@
 
 import { cosineSimilarity } from "../distiller/embeddings";
 import {
-  calculatePrincipleScore,
   type Principle,
   type SearchQuery,
   type Triple,
+  calculatePrincipleScore,
 } from "../types";
 
 /**

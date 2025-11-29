@@ -7,12 +7,12 @@
 
 import { ExpBaseStorage } from "../storage/expbase";
 import {
-  calculatePrincipleScore,
   type Principle,
   type PrincipleScore,
   type SearchQuery,
   type SearchResponse,
   type SearchResult,
+  calculatePrincipleScore,
 } from "../types";
 
 /**

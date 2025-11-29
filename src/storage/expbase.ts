@@ -8,7 +8,6 @@
 import { randomUUID } from "node:crypto";
 import Database from "better-sqlite3";
 import {
-  calculatePrincipleScore,
   type ExperienceBaseStats,
   type NewPrinciple,
   type NewTrace,
@@ -16,6 +15,7 @@ import {
   type PrincipleScore,
   type SearchQuery,
   type Trace,
+  calculatePrincipleScore,
 } from "../types";
 
 /**
