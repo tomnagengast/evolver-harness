@@ -23,7 +23,6 @@ import { Distiller } from "./distiller.js";
 interface CLIConfig {
   dbPath: string;
   verbose: boolean;
-  anthropicApiKey?: string;
   openaiApiKey?: string;
   model?: string;
   similarityThreshold?: number;
@@ -42,7 +41,6 @@ function parseCliArgs(): {
     options: {
       db: { type: "string", short: "d" },
       verbose: { type: "boolean", short: "v", default: false },
-      "anthropic-key": { type: "string" },
       "openai-key": { type: "string" },
       model: { type: "string", short: "m" },
       threshold: { type: "string", short: "t" },
@@ -71,7 +69,6 @@ function parseCliArgs(): {
   const config: CLIConfig = {
     dbPath,
     verbose: values.verbose || false,
-    anthropicApiKey: values["anthropic-key"] as string | undefined,
     openaiApiKey: values["openai-key"] as string | undefined,
     model: values.model as string | undefined,
     similarityThreshold: values["similarity-threshold"]
@@ -117,8 +114,7 @@ COMMANDS:
 OPTIONS:
   -d, --db <path>                  Database path (default: ./expbase.db)
   -v, --verbose                    Enable verbose logging
-  --anthropic-key <key>            Anthropic API key (or set ANTHROPIC_API_KEY)
-  --openai-key <key>               OpenAI API key (or set OPENAI_API_KEY)
+  --openai-key <key>               OpenAI API key for embeddings (or set OPENAI_API_KEY)
   -m, --model <model>              Claude model to use (default: claude-sonnet-4-5-20250929)
   -s, --similarity-threshold <n>   Similarity threshold for merging (default: 0.85)
   -t, --threshold <n>              Score threshold for pruning (default: 0.3)
@@ -169,7 +165,6 @@ async function runDistill(args: string[], config: CLIConfig): Promise<void> {
 
   const storage = new ExpBaseStorage({ dbPath: config.dbPath });
   const distiller = new Distiller(storage, {
-    anthropicApiKey: config.anthropicApiKey,
     model: config.model,
     similarityThreshold: config.similarityThreshold,
     embeddingConfig: {
@@ -249,7 +244,6 @@ async function runDistillTrace(
 
   const storage = new ExpBaseStorage({ dbPath: config.dbPath });
   const distiller = new Distiller(storage, {
-    anthropicApiKey: config.anthropicApiKey,
     model: config.model,
     similarityThreshold: config.similarityThreshold,
     embeddingConfig: {
@@ -314,7 +308,6 @@ async function runDedupe(config: CLIConfig): Promise<void> {
 
   const storage = new ExpBaseStorage({ dbPath: config.dbPath });
   const distiller = new Distiller(storage, {
-    anthropicApiKey: config.anthropicApiKey,
     model: config.model,
     similarityThreshold: config.similarityThreshold,
     embeddingConfig: {

@@ -9,7 +9,7 @@
  * - Updates existing principles when similar ones exist
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import { query } from "@anthropic-ai/claude-agent-sdk";
 import type { ExpBaseStorage } from "../storage/expbase.js";
 import type {
   DistillationConfig,
@@ -33,9 +33,6 @@ import {
  * Configuration for the Distiller
  */
 export interface DistillerConfig {
-  /** Anthropic API key for Claude */
-  anthropicApiKey?: string;
-
   /** Model to use for distillation (default: claude-sonnet-4-5-20250929) */
   model?: string;
 
@@ -87,24 +84,15 @@ interface DeduplicationDecision {
  * Distiller class for offline principle extraction
  */
 export class Distiller {
-  private anthropic: Anthropic;
   private storage: ExpBaseStorage;
-  private config: Required<DistillerConfig>;
+  private config: Required<Omit<DistillerConfig, "embeddingConfig">> & {
+    embeddingConfig: EmbeddingConfig;
+  };
 
   constructor(storage: ExpBaseStorage, config: DistillerConfig = {}) {
     this.storage = storage;
 
-    const apiKey = config.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      throw new Error(
-        "Anthropic API key required. Set ANTHROPIC_API_KEY or pass anthropicApiKey in config",
-      );
-    }
-
-    this.anthropic = new Anthropic({ apiKey });
-
     this.config = {
-      anthropicApiKey: apiKey,
       model: config.model || "claude-sonnet-4-5-20250929",
       similarityThreshold: config.similarityThreshold ?? 0.85,
       maxExamplesPerPrinciple: config.maxExamplesPerPrinciple ?? 5,
@@ -375,26 +363,30 @@ export class Distiller {
   // Private helper methods
 
   /**
-   * Analyze a trace using Claude API
+   * Analyze a trace using Claude Agent SDK
    */
   private async analyzeTrace(trace: Trace): Promise<TraceAnalysisResult> {
     const prompt = DISTILLATION_USER_PROMPT_TEMPLATE(trace);
 
     try {
-      const message = await this.anthropic.messages.create({
-        model: this.config.model,
-        max_tokens: 4096,
-        system: DISTILLATION_SYSTEM_PROMPT,
-        messages: [
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
+      const stream = query({
+        prompt,
+        options: {
+          model: this.config.model,
+          systemPrompt: DISTILLATION_SYSTEM_PROMPT,
+        },
       });
 
-      const responseText =
-        message.content[0].type === "text" ? message.content[0].text : "";
+      let responseText = "";
+      for await (const item of stream) {
+        if (item.type === "assistant") {
+          for (const chunk of item.message.content) {
+            if (chunk.type === "text") {
+              responseText += chunk.text;
+            }
+          }
+        }
+      }
 
       // Parse JSON response
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
@@ -602,3 +594,4 @@ export class Distiller {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
+

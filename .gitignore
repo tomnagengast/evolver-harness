@@ -3,3 +3,12 @@ _tmp
 dist
 settings.local.json
 
+
+# Database files
+expbase.db
+expbase.db-wal
+expbase.db-shm
+*.db
+*.db-wal
+*.db-shm
+
