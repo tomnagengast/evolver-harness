@@ -12,11 +12,11 @@
     "lint": "biome check --write .",
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit",
-    "distill": "tsx src/distiller/cli.ts distill",
-    "distill:stats": "tsx src/distiller/cli.ts stats",
-    "distill:trace": "tsx src/distiller/cli.ts distill-trace",
-    "distill:dedupe": "tsx src/distiller/cli.ts dedupe",
-    "distill:prune": "tsx src/distiller/cli.ts prune"
+    "distill": "bun src/distiller/cli.ts distill",
+    "distill:stats": "bun src/distiller/cli.ts stats",
+    "distill:trace": "bun src/distiller/cli.ts distill-trace",
+    "distill:dedupe": "bun src/distiller/cli.ts dedupe",
+    "distill:prune": "bun src/distiller/cli.ts prune"
   },
   "keywords": ["evolver", "expbase", "sqlite", "storage", "claude-code"],
   "author": "Tom Nagengast (tnagengast@gmail.com)",

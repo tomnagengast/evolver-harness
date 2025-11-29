@@ -462,15 +462,15 @@ export class ExpBaseStorage {
       if (query.tags && query.tags.length > 0) {
         const tagConditions = query.tags.map(() => "tags LIKE ?").join(" OR ");
         sql += ` AND (${tagConditions})`;
-        query.tags.forEach((tag) => params.push(`%"${tag}"%`));
+        for (const tag of query.tags) params.push(`%"${tag}"%`);
       }
 
       // Filter by triples
       if (query.triples && query.triples.length > 0) {
-        query.triples.forEach((triple) => {
+        for (const triple of query.triples) {
           sql += " AND triples LIKE ?";
           params.push(`%${JSON.stringify(triple).slice(1, -1)}%`);
-        });
+        }
       }
 
       // Filter by time range
@@ -523,7 +523,7 @@ export class ExpBaseStorage {
       if (query.tags && query.tags.length > 0) {
         const tagConditions = query.tags.map(() => "tags LIKE ?").join(" OR ");
         sql += ` AND (${tagConditions})`;
-        query.tags.forEach((tag) => params.push(`%"${tag}"%`));
+        for (const tag of query.tags) params.push(`%"${tag}"%`);
       }
 
       // Filter by outcome status
@@ -535,7 +535,7 @@ export class ExpBaseStorage {
           .map(() => "outcome LIKE ?")
           .join(" OR ");
         sql += ` AND (${statusConditions})`;
-        statuses.forEach((status) => params.push(`%"status":"${status}"%`));
+        for (const status of statuses) params.push(`%"status":"${status}"%`);
       }
 
       // Filter by model
@@ -545,7 +545,7 @@ export class ExpBaseStorage {
           : [query.model_filter];
         const modelConditions = models.map(() => "model_used = ?").join(" OR ");
         sql += ` AND (${modelConditions})`;
-        models.forEach((model) => params.push(model));
+        for (const model of models) params.push(model);
       }
 
       // Filter by time range
@@ -711,7 +711,8 @@ export class ExpBaseStorage {
         "SELECT COUNT(*) as count FROM traces",
       );
 
-      const principleCount = (principleCountStmt.get() as { count: number }).count;
+      const principleCount = (principleCountStmt.get() as { count: number })
+        .count;
       const traceCount = (traceCountStmt.get() as { count: number }).count;
 
       // Get all principles for score calculation
@@ -725,7 +726,7 @@ export class ExpBaseStorage {
           : 0;
 
       // Calculate score distribution
-      let scoreDistribution;
+      let scoreDistribution: ExperienceBaseStats["score_distribution"];
       if (scores.length > 0) {
         const sortedScores = [...scores].sort((a, b) => a - b);
         const percentile = (p: number) =>
@@ -760,8 +761,8 @@ export class ExpBaseStorage {
 
       // Calculate trace statistics
       const traces = this.getAllTraces();
-      let traceSuccessRate;
-      let avgTraceDurationMs;
+      let traceSuccessRate: number | undefined;
+      let avgTraceDurationMs: number | undefined;
 
       if (traces.length > 0) {
         const successCount = traces.filter(
