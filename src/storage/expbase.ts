@@ -5,19 +5,19 @@
  * using better-sqlite3 for synchronous SQLite operations.
  */
 
-import Database from 'better-sqlite3';
-import { randomUUID } from 'crypto';
+import Database from "better-sqlite3";
+import { randomUUID } from "crypto";
 import {
-  Principle,
-  Trace,
-  SearchQuery,
-  Triple,
   calculatePrincipleScore,
-  PrincipleScore,
-  ExperienceBaseStats,
-  NewPrinciple,
-  NewTrace,
-} from '../types';
+  type ExperienceBaseStats,
+  type NewPrinciple,
+  type NewTrace,
+  type Principle,
+  type PrincipleScore,
+  type SearchQuery,
+  type Trace,
+  Triple,
+} from "../types";
 
 /**
  * Represents a principle usage event for analytics and scoring
@@ -33,7 +33,7 @@ export interface PrincipleUsageEvent {
 /**
  * Update data for modifying an existing principle
  */
-export type PrincipleUpdate = Partial<Omit<Principle, 'id' | 'created_at'>>;
+export type PrincipleUpdate = Partial<Omit<Principle, "id" | "created_at">>;
 
 /**
  * Configuration options for the ExpBase storage layer
@@ -71,17 +71,17 @@ export class ExpBaseStorage {
 
       // Enable WAL mode for better concurrency
       if (this.config.enableWAL) {
-        this.db.pragma('journal_mode = WAL');
+        this.db.pragma("journal_mode = WAL");
       }
 
       // Optimize for performance
-      this.db.pragma('synchronous = NORMAL');
-      this.db.pragma('foreign_keys = ON');
+      this.db.pragma("synchronous = NORMAL");
+      this.db.pragma("foreign_keys = ON");
 
       this.initDatabase();
     } catch (error) {
       throw new Error(
-        `Failed to initialize ExpBase database: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to initialize ExpBase database: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -178,7 +178,7 @@ export class ExpBaseStorage {
       `);
     } catch (error) {
       throw new Error(
-        `Failed to initialize database schema: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to initialize database schema: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -225,7 +225,9 @@ export class ExpBaseStorage {
         examples: JSON.stringify(newPrinciple.examples),
         use_count: newPrinciple.use_count,
         success_count: newPrinciple.success_count,
-        embedding: newPrinciple.embedding ? JSON.stringify(newPrinciple.embedding) : null,
+        embedding: newPrinciple.embedding
+          ? JSON.stringify(newPrinciple.embedding)
+          : null,
         created_at: newPrinciple.created_at,
         updated_at: newPrinciple.updated_at,
         confidence: newPrinciple.confidence ?? null,
@@ -236,7 +238,7 @@ export class ExpBaseStorage {
       return newPrinciple;
     } catch (error) {
       throw new Error(
-        `Failed to add principle: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to add principle: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -293,7 +295,7 @@ export class ExpBaseStorage {
       return updated;
     } catch (error) {
       throw new Error(
-        `Failed to update principle: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to update principle: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -303,7 +305,7 @@ export class ExpBaseStorage {
    */
   getPrinciple(id: string): Principle | null {
     try {
-      const stmt = this.db.prepare('SELECT * FROM principles WHERE id = ?');
+      const stmt = this.db.prepare("SELECT * FROM principles WHERE id = ?");
       const row = stmt.get(id) as any;
 
       if (!row) {
@@ -313,7 +315,7 @@ export class ExpBaseStorage {
       return this.deserializePrinciple(row);
     } catch (error) {
       throw new Error(
-        `Failed to get principle: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to get principle: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -323,12 +325,14 @@ export class ExpBaseStorage {
    */
   getAllPrinciples(): Principle[] {
     try {
-      const stmt = this.db.prepare('SELECT * FROM principles ORDER BY updated_at DESC');
+      const stmt = this.db.prepare(
+        "SELECT * FROM principles ORDER BY updated_at DESC",
+      );
       const rows = stmt.all() as any[];
       return rows.map((row) => this.deserializePrinciple(row));
     } catch (error) {
       throw new Error(
-        `Failed to get all principles: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to get all principles: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -338,12 +342,12 @@ export class ExpBaseStorage {
    */
   deletePrinciple(id: string): boolean {
     try {
-      const stmt = this.db.prepare('DELETE FROM principles WHERE id = ?');
+      const stmt = this.db.prepare("DELETE FROM principles WHERE id = ?");
       const result = stmt.run(id);
       return result.changes > 0;
     } catch (error) {
       throw new Error(
-        `Failed to delete principle: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to delete principle: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -407,7 +411,7 @@ export class ExpBaseStorage {
       return newTrace;
     } catch (error) {
       throw new Error(
-        `Failed to add trace: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to add trace: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -417,7 +421,7 @@ export class ExpBaseStorage {
    */
   getTrace(id: string): Trace | null {
     try {
-      const stmt = this.db.prepare('SELECT * FROM traces WHERE id = ?');
+      const stmt = this.db.prepare("SELECT * FROM traces WHERE id = ?");
       const row = stmt.get(id) as any;
 
       if (!row) {
@@ -427,7 +431,7 @@ export class ExpBaseStorage {
       return this.deserializeTrace(row);
     } catch (error) {
       throw new Error(
-        `Failed to get trace: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to get trace: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -437,12 +441,14 @@ export class ExpBaseStorage {
    */
   getAllTraces(): Trace[] {
     try {
-      const stmt = this.db.prepare('SELECT * FROM traces ORDER BY created_at DESC');
+      const stmt = this.db.prepare(
+        "SELECT * FROM traces ORDER BY created_at DESC",
+      );
       const rows = stmt.all() as any[];
       return rows.map((row) => this.deserializeTrace(row));
     } catch (error) {
       throw new Error(
-        `Failed to get all traces: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to get all traces: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -452,12 +458,14 @@ export class ExpBaseStorage {
    */
   getTracesBySession(sessionId: string): Trace[] {
     try {
-      const stmt = this.db.prepare('SELECT * FROM traces WHERE session_id = ? ORDER BY created_at ASC');
+      const stmt = this.db.prepare(
+        "SELECT * FROM traces WHERE session_id = ? ORDER BY created_at ASC",
+      );
       const rows = stmt.all(sessionId) as any[];
       return rows.map((row) => this.deserializeTrace(row));
     } catch (error) {
       throw new Error(
-        `Failed to get traces by session: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to get traces by session: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -467,12 +475,12 @@ export class ExpBaseStorage {
    */
   searchPrinciples(query: SearchQuery): Principle[] {
     try {
-      let sql = 'SELECT * FROM principles WHERE 1=1';
+      let sql = "SELECT * FROM principles WHERE 1=1";
       const params: any[] = [];
 
       // Filter by tags (ANY match)
       if (query.tags && query.tags.length > 0) {
-        const tagConditions = query.tags.map(() => 'tags LIKE ?').join(' OR ');
+        const tagConditions = query.tags.map(() => "tags LIKE ?").join(" OR ");
         sql += ` AND (${tagConditions})`;
         query.tags.forEach((tag) => params.push(`%"${tag}"%`));
       }
@@ -480,29 +488,29 @@ export class ExpBaseStorage {
       // Filter by triples
       if (query.triples && query.triples.length > 0) {
         query.triples.forEach((triple) => {
-          sql += ' AND triples LIKE ?';
+          sql += " AND triples LIKE ?";
           params.push(`%${JSON.stringify(triple).slice(1, -1)}%`);
         });
       }
 
       // Filter by time range
       if (query.time_range) {
-        sql += ' AND created_at >= ? AND created_at <= ?';
+        sql += " AND created_at >= ? AND created_at <= ?";
         params.push(query.time_range.start, query.time_range.end);
       }
 
       // Filter by minimum principle score
       if (query.min_principle_score !== undefined) {
         // This is approximate filtering - exact filtering happens after retrieval
-        sql += ' AND (success_count + 1.0) / (use_count + 2.0) >= ?';
+        sql += " AND (success_count + 1.0) / (use_count + 2.0) >= ?";
         params.push(query.min_principle_score);
       }
 
-      sql += ' ORDER BY updated_at DESC';
+      sql += " ORDER BY updated_at DESC";
 
       // Apply limit
       if (query.limit) {
-        sql += ' LIMIT ?';
+        sql += " LIMIT ?";
         params.push(query.limit);
       }
 
@@ -518,7 +526,7 @@ export class ExpBaseStorage {
       return principles;
     } catch (error) {
       throw new Error(
-        `Failed to search principles: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to search principles: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -528,43 +536,49 @@ export class ExpBaseStorage {
    */
   searchTraces(query: SearchQuery): Trace[] {
     try {
-      let sql = 'SELECT * FROM traces WHERE 1=1';
+      let sql = "SELECT * FROM traces WHERE 1=1";
       const params: any[] = [];
 
       // Filter by tags (ANY match)
       if (query.tags && query.tags.length > 0) {
-        const tagConditions = query.tags.map(() => 'tags LIKE ?').join(' OR ');
+        const tagConditions = query.tags.map(() => "tags LIKE ?").join(" OR ");
         sql += ` AND (${tagConditions})`;
         query.tags.forEach((tag) => params.push(`%"${tag}"%`));
       }
 
       // Filter by outcome status
       if (query.outcome_filter) {
-        const statuses = Array.isArray(query.outcome_filter) ? query.outcome_filter : [query.outcome_filter];
-        const statusConditions = statuses.map(() => 'outcome LIKE ?').join(' OR ');
+        const statuses = Array.isArray(query.outcome_filter)
+          ? query.outcome_filter
+          : [query.outcome_filter];
+        const statusConditions = statuses
+          .map(() => "outcome LIKE ?")
+          .join(" OR ");
         sql += ` AND (${statusConditions})`;
         statuses.forEach((status) => params.push(`%"status":"${status}"%`));
       }
 
       // Filter by model
       if (query.model_filter) {
-        const models = Array.isArray(query.model_filter) ? query.model_filter : [query.model_filter];
-        const modelConditions = models.map(() => 'model_used = ?').join(' OR ');
+        const models = Array.isArray(query.model_filter)
+          ? query.model_filter
+          : [query.model_filter];
+        const modelConditions = models.map(() => "model_used = ?").join(" OR ");
         sql += ` AND (${modelConditions})`;
         models.forEach((model) => params.push(model));
       }
 
       // Filter by time range
       if (query.time_range) {
-        sql += ' AND created_at >= ? AND created_at <= ?';
+        sql += " AND created_at >= ? AND created_at <= ?";
         params.push(query.time_range.start, query.time_range.end);
       }
 
-      sql += ' ORDER BY created_at DESC';
+      sql += " ORDER BY created_at DESC";
 
       // Apply limit
       if (query.limit) {
-        sql += ' LIMIT ?';
+        sql += " LIMIT ?";
         params.push(query.limit);
       }
 
@@ -573,7 +587,7 @@ export class ExpBaseStorage {
       return rows.map((row) => this.deserializeTrace(row));
     } catch (error) {
       throw new Error(
-        `Failed to search traces: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to search traces: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -581,7 +595,11 @@ export class ExpBaseStorage {
   /**
    * Record a principle usage event
    */
-  recordUsage(principleId: string, traceId: string | undefined, wasSuccessful: boolean): PrincipleUsageEvent {
+  recordUsage(
+    principleId: string,
+    traceId: string | undefined,
+    wasSuccessful: boolean,
+  ): PrincipleUsageEvent {
     const transaction = this.db.transaction(() => {
       try {
         // Create usage event
@@ -620,7 +638,7 @@ export class ExpBaseStorage {
         return event;
       } catch (error) {
         throw new Error(
-          `Failed to record usage: ${error instanceof Error ? error.message : String(error)}`
+          `Failed to record usage: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
     });
@@ -641,7 +659,7 @@ export class ExpBaseStorage {
       return calculatePrincipleScore(principle);
     } catch (error) {
       throw new Error(
-        `Failed to get principle score: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to get principle score: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -668,7 +686,7 @@ export class ExpBaseStorage {
       return scores;
     } catch (error) {
       throw new Error(
-        `Failed to get principle scores: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to get principle scores: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -676,7 +694,10 @@ export class ExpBaseStorage {
   /**
    * Prune principles with scores below the threshold
    */
-  pruneLowScorePrinciples(threshold: number, minUsageCount: number = 10): string[] {
+  pruneLowScorePrinciples(
+    threshold: number,
+    minUsageCount: number = 10,
+  ): string[] {
     try {
       const principles = this.getAllPrinciples();
       const prunedIds: string[] = [];
@@ -695,7 +716,7 @@ export class ExpBaseStorage {
       return prunedIds;
     } catch (error) {
       throw new Error(
-        `Failed to prune principles: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to prune principles: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -706,8 +727,12 @@ export class ExpBaseStorage {
   getStats(): ExperienceBaseStats {
     try {
       // Count principles and traces
-      const principleCountStmt = this.db.prepare('SELECT COUNT(*) as count FROM principles');
-      const traceCountStmt = this.db.prepare('SELECT COUNT(*) as count FROM traces');
+      const principleCountStmt = this.db.prepare(
+        "SELECT COUNT(*) as count FROM principles",
+      );
+      const traceCountStmt = this.db.prepare(
+        "SELECT COUNT(*) as count FROM traces",
+      );
 
       const principleCount = (principleCountStmt.get() as any).count;
       const traceCount = (traceCountStmt.get() as any).count;
@@ -717,13 +742,17 @@ export class ExpBaseStorage {
       const scores = principles.map((p) => calculatePrincipleScore(p));
 
       // Calculate average score
-      const avgScore = scores.length > 0 ? scores.reduce((sum, s) => sum + s, 0) / scores.length : 0;
+      const avgScore =
+        scores.length > 0
+          ? scores.reduce((sum, s) => sum + s, 0) / scores.length
+          : 0;
 
       // Calculate score distribution
-      let scoreDistribution = undefined;
+      let scoreDistribution;
       if (scores.length > 0) {
         const sortedScores = [...scores].sort((a, b) => a - b);
-        const percentile = (p: number) => sortedScores[Math.floor((p / 100) * sortedScores.length)];
+        const percentile = (p: number) =>
+          sortedScores[Math.floor((p / 100) * sortedScores.length)];
 
         scoreDistribution = {
           min: sortedScores[0],
@@ -754,11 +783,13 @@ export class ExpBaseStorage {
 
       // Calculate trace statistics
       const traces = this.getAllTraces();
-      let traceSuccessRate = undefined;
-      let avgTraceDurationMs = undefined;
+      let traceSuccessRate;
+      let avgTraceDurationMs;
 
       if (traces.length > 0) {
-        const successCount = traces.filter((t) => t.outcome.status === 'success').length;
+        const successCount = traces.filter(
+          (t) => t.outcome.status === "success",
+        ).length;
         traceSuccessRate = successCount / traces.length;
 
         const totalDuration = traces.reduce((sum, t) => sum + t.duration_ms, 0);
@@ -766,7 +797,7 @@ export class ExpBaseStorage {
       }
 
       // Get time range
-      let timeRange = undefined;
+      let timeRange;
       const allDates = [
         ...principles.map((p) => p.created_at),
         ...traces.map((t) => t.created_at),
@@ -785,14 +816,15 @@ export class ExpBaseStorage {
         avg_principle_score: avgScore,
         score_distribution: scoreDistribution,
         top_tags: topTags.length > 0 ? topTags : undefined,
-        top_principles: principleScores.length > 0 ? principleScores : undefined,
+        top_principles:
+          principleScores.length > 0 ? principleScores : undefined,
         trace_success_rate: traceSuccessRate,
         avg_trace_duration_ms: avgTraceDurationMs,
         time_range: timeRange,
       };
     } catch (error) {
       throw new Error(
-        `Failed to get stats: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to get stats: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -803,7 +835,7 @@ export class ExpBaseStorage {
   getPrincipleUsageHistory(principleId: string): PrincipleUsageEvent[] {
     try {
       const stmt = this.db.prepare(
-        'SELECT * FROM principle_usage WHERE principle_id = ? ORDER BY created_at DESC'
+        "SELECT * FROM principle_usage WHERE principle_id = ? ORDER BY created_at DESC",
       );
       const rows = stmt.all(principleId) as any[];
 
@@ -816,7 +848,7 @@ export class ExpBaseStorage {
       }));
     } catch (error) {
       throw new Error(
-        `Failed to get usage history: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to get usage history: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -829,7 +861,7 @@ export class ExpBaseStorage {
       this.db.close();
     } catch (error) {
       throw new Error(
-        `Failed to close database: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to close database: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -842,7 +874,7 @@ export class ExpBaseStorage {
       this.db.backup(destinationPath);
     } catch (error) {
       throw new Error(
-        `Failed to backup database: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to backup database: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -852,10 +884,10 @@ export class ExpBaseStorage {
    */
   vacuum(): void {
     try {
-      this.db.exec('VACUUM');
+      this.db.exec("VACUUM");
     } catch (error) {
       throw new Error(
-        `Failed to vacuum database: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to vacuum database: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }

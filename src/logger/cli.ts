@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 /**
  * CLI interface for TraceLogger
  * Designed to be invoked from Claude Code hooks
@@ -12,23 +13,32 @@
  *   abandon    - Abandon the current session without saving
  */
 
-import { TraceLogger, SessionStateManager, LogSession } from './trace-logger.js';
-import { TraceOutcome } from '../types.js';
-import * as path from 'path';
-import * as os from 'os';
+import * as os from "os";
+import * as path from "path";
+import type { TraceOutcome } from "../types.js";
+import {
+  type LogSession,
+  SessionStateManager,
+  TraceLogger,
+} from "./trace-logger.js";
 
 /**
  * Parse command line arguments into a structured format
  */
-function parseArgs(args: string[]): { command: string; options: Record<string, string> } {
-  const command = args[0] || 'help';
+function parseArgs(args: string[]): {
+  command: string;
+  options: Record<string, string>;
+} {
+  const command = args[0] || "help";
   const options: Record<string, string> = {};
 
   for (let i = 1; i < args.length; i++) {
     const arg = args[i];
-    if (arg.startsWith('--')) {
-      const [key, ...valueParts] = arg.slice(2).split('=');
-      const value = valueParts.join('=') || (args[i + 1] && !args[i + 1].startsWith('--') ? args[++i] : 'true');
+    if (arg.startsWith("--")) {
+      const [key, ...valueParts] = arg.slice(2).split("=");
+      const value =
+        valueParts.join("=") ||
+        (args[i + 1] && !args[i + 1].startsWith("--") ? args[++i] : "true");
       options[key] = value;
     }
   }
@@ -44,23 +54,40 @@ async function main() {
   const { command, options } = parseArgs(args);
 
   // Default paths
-  const dbPath = options.dbPath || process.env.EVOLVER_DB_PATH || path.join(os.homedir(), '.evolver', 'expbase.db');
-  const stateFilePath = options.stateFile || process.env.EVOLVER_STATE_FILE || path.join(os.tmpdir(), 'evolver-harness-session.json');
+  const dbPath =
+    options.dbPath ||
+    process.env.EVOLVER_DB_PATH ||
+    path.join(os.homedir(), ".evolver", "expbase.db");
+  const stateFilePath =
+    options.stateFile ||
+    process.env.EVOLVER_STATE_FILE ||
+    path.join(os.tmpdir(), "evolver-harness-session.json");
 
   const stateManager = new SessionStateManager(stateFilePath);
 
   try {
     switch (command) {
-      case 'start': {
+      case "start": {
         if (stateManager.hasState()) {
-          console.error('Error: A session is already active. Use "end" or "abandon" first.');
+          console.error(
+            'Error: A session is already active. Use "end" or "abandon" first.',
+          );
           process.exit(1);
         }
 
-        const taskSummary = options.task || options.taskSummary || 'Unknown task';
-        const problemDescription = options.problem || options.problemDescription || 'No description provided';
-        const modelUsed = options.model || options.modelUsed || process.env.CLAUDE_MODEL || 'unknown';
-        const agentId = options.agent || options.agentId || process.env.CLAUDE_AGENT_ID;
+        const taskSummary =
+          options.task || options.taskSummary || "Unknown task";
+        const problemDescription =
+          options.problem ||
+          options.problemDescription ||
+          "No description provided";
+        const modelUsed =
+          options.model ||
+          options.modelUsed ||
+          process.env.CLAUDE_MODEL ||
+          "unknown";
+        const agentId =
+          options.agent || options.agentId || process.env.CLAUDE_AGENT_ID;
         const sessionId = options.session || options.sessionId;
 
         const session: LogSession = {
@@ -75,11 +102,17 @@ async function main() {
         };
 
         stateManager.saveState(session);
-        console.log(JSON.stringify({ status: 'success', sessionId: session.id, message: 'Session started' }));
+        console.log(
+          JSON.stringify({
+            status: "success",
+            sessionId: session.id,
+            message: "Session started",
+          }),
+        );
         break;
       }
 
-      case 'log-tool': {
+      case "log-tool": {
         const session = stateManager.loadState();
         if (!session) {
           console.error('Error: No active session. Use "start" first.');
@@ -88,14 +121,20 @@ async function main() {
 
         const tool = options.tool;
         if (!tool) {
-          console.error('Error: --tool is required');
+          console.error("Error: --tool is required");
           process.exit(1);
         }
 
         const input = options.input ? JSON.parse(options.input) : {};
-        const output = options.output ? (options.output.startsWith('{') || options.output.startsWith('[') ? JSON.parse(options.output) : options.output) : null;
+        const output = options.output
+          ? options.output.startsWith("{") || options.output.startsWith("[")
+            ? JSON.parse(options.output)
+            : options.output
+          : null;
         const timestamp = options.timestamp || new Date().toISOString();
-        const durationMs = options.duration ? parseInt(options.duration, 10) : undefined;
+        const durationMs = options.duration
+          ? parseInt(options.duration, 10)
+          : undefined;
 
         let error;
         if (options.error) {
@@ -116,11 +155,17 @@ async function main() {
         });
 
         stateManager.saveState(session);
-        console.log(JSON.stringify({ status: 'success', message: 'Tool call logged', toolCallCount: session.toolCalls.length }));
+        console.log(
+          JSON.stringify({
+            status: "success",
+            message: "Tool call logged",
+            toolCallCount: session.toolCalls.length,
+          }),
+        );
         break;
       }
 
-      case 'log-thought': {
+      case "log-thought": {
         const session = stateManager.loadState();
         if (!session) {
           console.error('Error: No active session. Use "start" first.');
@@ -129,27 +174,41 @@ async function main() {
 
         const thought = options.thought || options.message;
         if (!thought) {
-          console.error('Error: --thought or --message is required');
+          console.error("Error: --thought or --message is required");
           process.exit(1);
         }
 
         session.intermediateThoughts.push(thought);
         stateManager.saveState(session);
-        console.log(JSON.stringify({ status: 'success', message: 'Thought logged', thoughtCount: session.intermediateThoughts.length }));
+        console.log(
+          JSON.stringify({
+            status: "success",
+            message: "Thought logged",
+            thoughtCount: session.intermediateThoughts.length,
+          }),
+        );
         break;
       }
 
-      case 'end': {
+      case "end": {
         const session = stateManager.loadState();
         if (!session) {
-          console.error('Error: No active session to end.');
+          console.error("Error: No active session to end.");
           process.exit(1);
         }
 
-        const finalAnswer = options.answer || options.finalAnswer || 'No final answer provided';
-        const outcomeStatus = (options.outcome || options.status || 'success') as 'success' | 'failure' | 'partial';
-        const outcomeScore = options.score ? parseFloat(options.score) : (outcomeStatus === 'success' ? 1.0 : 0.0);
-        const outcomeExplanation = options.explanation || options.outcomeExplanation;
+        const finalAnswer =
+          options.answer || options.finalAnswer || "No final answer provided";
+        const outcomeStatus = (options.outcome ||
+          options.status ||
+          "success") as "success" | "failure" | "partial";
+        const outcomeScore = options.score
+          ? parseFloat(options.score)
+          : outcomeStatus === "success"
+            ? 1.0
+            : 0.0;
+        const outcomeExplanation =
+          options.explanation || options.outcomeExplanation;
 
         const outcome: TraceOutcome = {
           status: outcomeStatus,
@@ -157,62 +216,85 @@ async function main() {
           explanation: outcomeExplanation,
         };
 
-        const tags = options.tags ? options.tags.split(',').map((t: string) => t.trim()) : undefined;
-        const context = options.context ? JSON.parse(options.context) : undefined;
+        const tags = options.tags
+          ? options.tags.split(",").map((t: string) => t.trim())
+          : undefined;
+        const context = options.context
+          ? JSON.parse(options.context)
+          : undefined;
 
         // Create logger and save trace
         const logger = new TraceLogger(dbPath);
 
         // Reconstruct session in logger
-        logger['currentSession'] = session;
+        logger["currentSession"] = session;
 
-        const trace = logger.endSession(finalAnswer, outcome, { tags, context });
+        const trace = logger.endSession(finalAnswer, outcome, {
+          tags,
+          context,
+        });
         logger.close();
 
         stateManager.clearState();
-        console.log(JSON.stringify({
-          status: 'success',
-          message: 'Session ended and trace saved',
-          traceId: trace.id,
-          sessionId: session.id,
-          toolCallCount: session.toolCalls.length,
-          thoughtCount: session.intermediateThoughts.length,
-          durationMs: trace.duration_ms,
-        }));
-        break;
-      }
-
-      case 'status': {
-        const session = stateManager.loadState();
-        if (!session) {
-          console.log(JSON.stringify({ status: 'no_session', message: 'No active session' }));
-        } else {
-          const durationMs = Date.now() - session.startTime;
-          console.log(JSON.stringify({
-            status: 'active',
+        console.log(
+          JSON.stringify({
+            status: "success",
+            message: "Session ended and trace saved",
+            traceId: trace.id,
             sessionId: session.id,
-            taskSummary: session.taskSummary,
             toolCallCount: session.toolCalls.length,
             thoughtCount: session.intermediateThoughts.length,
-            durationMs,
-            modelUsed: session.modelUsed,
-            stateFile: stateFilePath,
-          }));
+            durationMs: trace.duration_ms,
+          }),
+        );
+        break;
+      }
+
+      case "status": {
+        const session = stateManager.loadState();
+        if (!session) {
+          console.log(
+            JSON.stringify({
+              status: "no_session",
+              message: "No active session",
+            }),
+          );
+        } else {
+          const durationMs = Date.now() - session.startTime;
+          console.log(
+            JSON.stringify({
+              status: "active",
+              sessionId: session.id,
+              taskSummary: session.taskSummary,
+              toolCallCount: session.toolCalls.length,
+              thoughtCount: session.intermediateThoughts.length,
+              durationMs,
+              modelUsed: session.modelUsed,
+              stateFile: stateFilePath,
+            }),
+          );
         }
         break;
       }
 
-      case 'abandon': {
+      case "abandon": {
         if (stateManager.hasState()) {
           stateManager.clearState();
-          console.log(JSON.stringify({ status: 'success', message: 'Session abandoned' }));
+          console.log(
+            JSON.stringify({ status: "success", message: "Session abandoned" }),
+          );
         } else {
-          console.log(JSON.stringify({ status: 'no_session', message: 'No active session to abandon' }));
+          console.log(
+            JSON.stringify({
+              status: "no_session",
+              message: "No active session to abandon",
+            }),
+          );
         }
         break;
       }
 
-      case 'help':
+      case "help":
       default: {
         console.log(`
 Evolver Harness Trace Logger CLI
@@ -287,11 +369,13 @@ Examples:
       }
     }
   } catch (error) {
-    console.error(JSON.stringify({
-      status: 'error',
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    }));
+    console.error(
+      JSON.stringify({
+        status: "error",
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      }),
+    );
     process.exit(1);
   }
 }

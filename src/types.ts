@@ -29,7 +29,7 @@ export interface Triple {
  */
 export interface TraceOutcome {
   /** Status of the trace execution */
-  status: 'success' | 'failure' | 'partial';
+  status: "success" | "failure" | "partial";
 
   /** Numeric score representing the quality of the outcome (0-1 typical range) */
   score: number;
@@ -191,7 +191,9 @@ export interface Principle {
  * const principle = { success_count: 8, use_count: 10, ... };
  * const score = calculatePrincipleScore(principle); // Returns 0.75
  */
-export function calculatePrincipleScore(principle: Pick<Principle, 'success_count' | 'use_count'>): number {
+export function calculatePrincipleScore(
+  principle: Pick<Principle, "success_count" | "use_count">,
+): number {
   return (principle.success_count + 1) / (principle.use_count + 2);
 }
 
@@ -234,16 +236,16 @@ export interface SearchQuery {
   min_principle_score?: number;
 
   /** Search mode: principles, traces, or both */
-  search_mode?: 'principles' | 'traces' | 'both';
+  search_mode?: "principles" | "traces" | "both";
 
   /** Optional time range filter */
   time_range?: {
     start: string; // ISO 8601
-    end: string;   // ISO 8601
+    end: string; // ISO 8601
   };
 
   /** Optional outcome filter for traces */
-  outcome_filter?: TraceOutcome['status'] | TraceOutcome['status'][];
+  outcome_filter?: TraceOutcome["status"] | TraceOutcome["status"][];
 
   /** Optional model filter for traces */
   model_filter?: string | string[];
@@ -257,7 +259,7 @@ export interface SearchQuery {
  */
 export interface SearchResult {
   /** Type of the result */
-  type: 'principle' | 'trace';
+  type: "principle" | "trace";
 
   /** The principle or trace that matched */
   item: Principle | Trace;
@@ -352,7 +354,7 @@ export interface DistillationResult {
 
   /** Optional errors or warnings encountered during distillation */
   issues?: Array<{
-    severity: 'error' | 'warning' | 'info';
+    severity: "error" | "warning" | "info";
     message: string;
     trace_id?: string;
     principle_id?: string;
@@ -399,7 +401,7 @@ export interface ExperienceBaseStats {
   /** Time range of data */
   time_range?: {
     earliest: string; // ISO 8601
-    latest: string;   // ISO 8601
+    latest: string; // ISO 8601
   };
 }
 
@@ -435,21 +437,28 @@ export interface BatchPrincipleUpdate {
 /**
  * Type guard to check if a search result is a principle.
  */
-export function isPrincipleResult(result: SearchResult): result is SearchResult & { item: Principle } {
-  return result.type === 'principle';
+export function isPrincipleResult(
+  result: SearchResult,
+): result is SearchResult & { item: Principle } {
+  return result.type === "principle";
 }
 
 /**
  * Type guard to check if a search result is a trace.
  */
-export function isTraceResult(result: SearchResult): result is SearchResult & { item: Trace } {
-  return result.type === 'trace';
+export function isTraceResult(
+  result: SearchResult,
+): result is SearchResult & { item: Trace } {
+  return result.type === "trace";
 }
 
 /**
  * Helper type for creating a new principle (omits computed/generated fields).
  */
-export type NewPrinciple = Omit<Principle, 'id' | 'created_at' | 'updated_at' | 'use_count' | 'success_count'> & {
+export type NewPrinciple = Omit<
+  Principle,
+  "id" | "created_at" | "updated_at" | "use_count" | "success_count"
+> & {
   id?: string;
   use_count?: number;
   success_count?: number;
@@ -458,21 +467,21 @@ export type NewPrinciple = Omit<Principle, 'id' | 'created_at' | 'updated_at' | 
 /**
  * Helper type for creating a new trace (omits computed/generated fields).
  */
-export type NewTrace = Omit<Trace, 'id' | 'created_at'> & {
+export type NewTrace = Omit<Trace, "id" | "created_at"> & {
   id?: string;
 };
 
 /**
  * Helper type for partial updates to principles.
  */
-export type PrincipleUpdate = Partial<Omit<Principle, 'id' | 'created_at'>> & {
+export type PrincipleUpdate = Partial<Omit<Principle, "id" | "created_at">> & {
   id: string;
 };
 
 /**
  * Helper type for partial updates to traces.
  */
-export type TraceUpdate = Partial<Omit<Trace, 'id' | 'created_at'>> & {
+export type TraceUpdate = Partial<Omit<Trace, "id" | "created_at">> & {
   id: string;
 };
 

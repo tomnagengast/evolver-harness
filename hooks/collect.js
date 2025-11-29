@@ -15,9 +15,9 @@
  * - EVOLVER_STATE_FILE: Path to the session state file
  */
 
-import { spawn } from 'child_process';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { spawn } from "child_process";
+import { dirname, resolve as pathResolve } from "path";
+import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -26,20 +26,20 @@ const __dirname = dirname(__filename);
  * Extract tool input from stdin if available
  */
 async function readStdin() {
-  return new Promise((resolve) => {
-    let data = '';
+  return new Promise((resolvePromise) => {
+    let data = "";
 
-    process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (chunk) => {
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => {
       data += chunk;
     });
 
-    process.stdin.on('end', () => {
-      resolve(data);
+    process.stdin.on("end", () => {
+      resolvePromise(data);
     });
 
     // If stdin is empty or not available, resolve immediately
-    setTimeout(() => resolve(data), 100);
+    setTimeout(() => resolvePromise(data), 100);
   });
 }
 
@@ -47,65 +47,61 @@ async function readStdin() {
  * Call the CLI to log a tool call
  */
 function logToolCall(tool, input, output, durationMs) {
-  return new Promise((resolve, reject) => {
-    const cliPath = resolve(__dirname, '../src/logger/cli.ts');
+  return new Promise((resolvePromise, reject) => {
+    const cliPath = pathResolve(__dirname, "../src/logger/cli.ts");
 
-    const args = [
-      cliPath,
-      'log-tool',
-      '--tool', tool,
-    ];
+    const args = [cliPath, "log-tool", "--tool", tool];
 
     if (input) {
-      args.push('--input', JSON.stringify(input));
+      args.push("--input", JSON.stringify(input));
     }
 
     if (output) {
       // Handle different output types
-      if (typeof output === 'string') {
-        args.push('--output', output);
+      if (typeof output === "string") {
+        args.push("--output", output);
       } else {
-        args.push('--output', JSON.stringify(output));
+        args.push("--output", JSON.stringify(output));
       }
     }
 
     if (durationMs) {
-      args.push('--duration', durationMs.toString());
+      args.push("--duration", durationMs.toString());
     }
 
     if (process.env.EVOLVER_DB_PATH) {
-      args.push('--dbPath', process.env.EVOLVER_DB_PATH);
+      args.push("--dbPath", process.env.EVOLVER_DB_PATH);
     }
 
     if (process.env.EVOLVER_STATE_FILE) {
-      args.push('--stateFile', process.env.EVOLVER_STATE_FILE);
+      args.push("--stateFile", process.env.EVOLVER_STATE_FILE);
     }
 
-    const child = spawn('node', args, {
-      stdio: ['ignore', 'pipe', 'pipe'],
+    const child = spawn("node", args, {
+      stdio: ["ignore", "pipe", "pipe"],
       env: process.env,
     });
 
-    let stdout = '';
-    let stderr = '';
+    let stdout = "";
+    let stderr = "";
 
-    child.stdout.on('data', (data) => {
+    child.stdout.on("data", (data) => {
       stdout += data.toString();
     });
 
-    child.stderr.on('data', (data) => {
+    child.stderr.on("data", (data) => {
       stderr += data.toString();
     });
 
-    child.on('close', (code) => {
+    child.on("close", (code) => {
       if (code !== 0) {
         reject(new Error(`CLI exited with code ${code}: ${stderr}`));
       } else {
-        resolve({ stdout, stderr });
+        resolvePromise({ stdout, stderr });
       }
     });
 
-    child.on('error', (error) => {
+    child.on("error", (error) => {
       reject(error);
     });
   });
@@ -123,7 +119,7 @@ async function main() {
 
     if (!toolName) {
       // No tool information available, skip logging
-      console.error('Warning: TOOL_NAME not set, skipping tool call logging');
+      console.error("Warning: TOOL_NAME not set, skipping tool call logging");
       process.exit(0);
     }
 
@@ -149,7 +145,7 @@ async function main() {
     }
 
     // Try to parse output as JSON
-    if (typeof output === 'string') {
+    if (typeof output === "string") {
       try {
         output = JSON.parse(output);
       } catch (e) {
@@ -157,14 +153,18 @@ async function main() {
       }
     }
 
-    const durationMs = toolDurationMs ? parseInt(toolDurationMs, 10) : undefined;
+    const durationMs = toolDurationMs
+      ? parseInt(toolDurationMs, 10)
+      : undefined;
 
     // Log the tool call
     await logToolCall(toolName, input, output, durationMs);
-
   } catch (error) {
     // Don't fail the hook if logging fails
-    console.error('Error in collect hook:', error instanceof Error ? error.message : String(error));
+    console.error(
+      "Error in collect hook:",
+      error instanceof Error ? error.message : String(error),
+    );
     process.exit(0);
   }
 }

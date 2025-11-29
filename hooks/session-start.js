@@ -16,9 +16,9 @@
  * - EVOLVER_STATE_FILE: Path to the session state file
  */
 
-import { spawn } from 'child_process';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { spawn } from "child_process";
+import { dirname, resolve as pathResolve } from "path";
+import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -27,20 +27,20 @@ const __dirname = dirname(__filename);
  * Read stdin for session information
  */
 async function readStdin() {
-  return new Promise((resolve) => {
-    let data = '';
+  return new Promise((resolvePromise) => {
+    let data = "";
 
-    process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (chunk) => {
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => {
       data += chunk;
     });
 
-    process.stdin.on('end', () => {
-      resolve(data);
+    process.stdin.on("end", () => {
+      resolvePromise(data);
     });
 
     // If stdin is empty or not available, resolve immediately
-    setTimeout(() => resolve(data), 100);
+    setTimeout(() => resolvePromise(data), 100);
   });
 }
 
@@ -48,61 +48,63 @@ async function readStdin() {
  * Call the CLI to start a session
  */
 function startSession(taskSummary, problemDescription, options = {}) {
-  return new Promise((resolve, reject) => {
-    const cliPath = resolve(__dirname, '../src/logger/cli.ts');
+  return new Promise((resolvePromise, reject) => {
+    const cliPath = pathResolve(__dirname, "../src/logger/cli.ts");
 
     const args = [
       cliPath,
-      'start',
-      '--task', taskSummary,
-      '--problem', problemDescription,
+      "start",
+      "--task",
+      taskSummary,
+      "--problem",
+      problemDescription,
     ];
 
     if (options.model) {
-      args.push('--model', options.model);
+      args.push("--model", options.model);
     }
 
     if (options.agent) {
-      args.push('--agent', options.agent);
+      args.push("--agent", options.agent);
     }
 
     if (options.session) {
-      args.push('--session', options.session);
+      args.push("--session", options.session);
     }
 
     if (process.env.EVOLVER_DB_PATH) {
-      args.push('--dbPath', process.env.EVOLVER_DB_PATH);
+      args.push("--dbPath", process.env.EVOLVER_DB_PATH);
     }
 
     if (process.env.EVOLVER_STATE_FILE) {
-      args.push('--stateFile', process.env.EVOLVER_STATE_FILE);
+      args.push("--stateFile", process.env.EVOLVER_STATE_FILE);
     }
 
-    const child = spawn('node', args, {
-      stdio: ['ignore', 'pipe', 'pipe'],
+    const child = spawn("node", args, {
+      stdio: ["ignore", "pipe", "pipe"],
       env: process.env,
     });
 
-    let stdout = '';
-    let stderr = '';
+    let stdout = "";
+    let stderr = "";
 
-    child.stdout.on('data', (data) => {
+    child.stdout.on("data", (data) => {
       stdout += data.toString();
     });
 
-    child.stderr.on('data', (data) => {
+    child.stderr.on("data", (data) => {
       stderr += data.toString();
     });
 
-    child.on('close', (code) => {
+    child.on("close", (code) => {
       if (code !== 0) {
         reject(new Error(`CLI exited with code ${code}: ${stderr}`));
       } else {
-        resolve({ stdout, stderr });
+        resolvePromise({ stdout, stderr });
       }
     });
 
-    child.on('error', (error) => {
+    child.on("error", (error) => {
       reject(error);
     });
   });
@@ -116,8 +118,8 @@ async function main() {
     // Read stdin for session information
     const stdinData = await readStdin();
 
-    let taskSummary = 'Claude Code Session';
-    let problemDescription = 'User interaction session';
+    let taskSummary = "Claude Code Session";
+    let problemDescription = "User interaction session";
 
     // Extract information from stdin if available
     if (stdinData) {
@@ -150,14 +152,15 @@ async function main() {
 
     // Start the session
     const result = await startSession(taskSummary, problemDescription, options);
-    console.log('Session started:', result.stdout);
-
+    console.log("Session started:", result.stdout);
   } catch (error) {
     // Don't fail the hook if logging fails
-    console.error('Error in session-start hook:', error instanceof Error ? error.message : String(error));
+    console.error(
+      "Error in session-start hook:",
+      error instanceof Error ? error.message : String(error),
+    );
     process.exit(0);
   }
 }
 
 main();
-

@@ -4,12 +4,12 @@
  * and saves completed traces to ExpBase storage.
  */
 
-import { randomUUID } from 'crypto';
-import { ToolCall, Trace, TraceOutcome, NewTrace } from '../types.js';
-import { ExpBaseStorage } from '../storage/expbase.js';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import { randomUUID } from "crypto";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+import { ExpBaseStorage } from "../storage/expbase.js";
+import type { NewTrace, ToolCall, Trace, TraceOutcome } from "../types.js";
 
 /**
  * Represents an active logging session
@@ -43,10 +43,10 @@ export class TraceLogger {
   startSession(
     taskSummary: string,
     problemDescription: string,
-    options?: { modelUsed?: string; agentId?: string; sessionId?: string }
+    options?: { modelUsed?: string; agentId?: string; sessionId?: string },
   ): LogSession {
     if (this.currentSession) {
-      throw new Error('A session is already active. Call endSession() first.');
+      throw new Error("A session is already active. Call endSession() first.");
     }
 
     this.currentSession = {
@@ -56,7 +56,7 @@ export class TraceLogger {
       toolCalls: [],
       intermediateThoughts: [],
       startTime: Date.now(),
-      modelUsed: options?.modelUsed || 'unknown',
+      modelUsed: options?.modelUsed || "unknown",
       agentId: options?.agentId,
     };
 
@@ -70,10 +70,14 @@ export class TraceLogger {
     tool: string,
     input: Record<string, unknown>,
     output: unknown,
-    options?: { timestamp?: string; durationMs?: number; error?: { message: string; code?: string; stack?: string } }
+    options?: {
+      timestamp?: string;
+      durationMs?: number;
+      error?: { message: string; code?: string; stack?: string };
+    },
   ): void {
     if (!this.currentSession) {
-      throw new Error('No active session. Call startSession() first.');
+      throw new Error("No active session. Call startSession() first.");
     }
 
     const toolCall: ToolCall = {
@@ -93,7 +97,7 @@ export class TraceLogger {
    */
   logThought(thought: string): void {
     if (!this.currentSession) {
-      throw new Error('No active session. Call startSession() first.');
+      throw new Error("No active session. Call startSession() first.");
     }
 
     this.currentSession.intermediateThoughts.push(thought);
@@ -105,10 +109,10 @@ export class TraceLogger {
   endSession(
     finalAnswer: string,
     outcome: TraceOutcome,
-    options?: { tags?: string[]; context?: Record<string, unknown> }
+    options?: { tags?: string[]; context?: Record<string, unknown> },
   ): Trace {
     if (!this.currentSession) {
-      throw new Error('No active session to end.');
+      throw new Error("No active session to end.");
     }
 
     const durationMs = Date.now() - this.currentSession.startTime;
@@ -177,7 +181,8 @@ export class SessionStateManager {
   private stateFilePath: string;
 
   constructor(stateFilePath?: string) {
-    this.stateFilePath = stateFilePath || path.join(os.tmpdir(), 'evolver-harness-session.json');
+    this.stateFilePath =
+      stateFilePath || path.join(os.tmpdir(), "evolver-harness-session.json");
   }
 
   /**
@@ -185,10 +190,14 @@ export class SessionStateManager {
    */
   saveState(session: LogSession): void {
     try {
-      fs.writeFileSync(this.stateFilePath, JSON.stringify(session, null, 2), 'utf-8');
+      fs.writeFileSync(
+        this.stateFilePath,
+        JSON.stringify(session, null, 2),
+        "utf-8",
+      );
     } catch (error) {
       throw new Error(
-        `Failed to save session state: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to save session state: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -202,11 +211,11 @@ export class SessionStateManager {
         return null;
       }
 
-      const data = fs.readFileSync(this.stateFilePath, 'utf-8');
+      const data = fs.readFileSync(this.stateFilePath, "utf-8");
       return JSON.parse(data) as LogSession;
     } catch (error) {
       throw new Error(
-        `Failed to load session state: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to load session state: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -221,7 +230,7 @@ export class SessionStateManager {
       }
     } catch (error) {
       throw new Error(
-        `Failed to clear session state: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to clear session state: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
