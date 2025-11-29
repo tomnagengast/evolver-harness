@@ -1,0 +1,26 @@
+{
+  "name": "evolver-harness",
+  "version": "1.0.0",
+  "description": "SQLite-based ExpBase storage layer for evolver harness",
+  "main": "src/storage/expbase.ts",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "evolver",
+    "expbase",
+    "sqlite",
+    "storage"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "better-sqlite3": "^11.7.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.1",
+    "typescript": "^5.7.2"
+  }
+}
