@@ -80,7 +80,9 @@ export async function generateEmbedding(
         throw new Error(`OpenAI API error: ${response.status} ${error}`);
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as {
+        data: Array<{ embedding: number[] }>;
+      };
       return data.data[0].embedding;
     } catch (error) {
       throw new Error(

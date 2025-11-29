@@ -1,27 +1,24 @@
 {
   "name": "evolver-harness",
   "version": "1.0.0",
-  "description": "Experience-augmented wrapper for Claude Code implementing EvolveR-style self-improvement",
-  "main": "src/storage/expbase.ts",
+  "description": "Experience-augmented extension for Claude Code implementing EvolveR-style self-improvement",
+  "main": "src/index.ts",
   "type": "module",
   "bin": {
-    "distiller": "./src/distiller/cli.ts",
-    "evolver-cli": "./src/orchestrator/cli.ts",
-    "trace-logger": "./src/logger/cli.ts"
+    "distiller": "./src/distiller/cli.ts"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --import tsx --test 'src/**/*.test.ts' 'hooks/**/*.test.ts'",
     "lint": "biome check --write .",
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit",
     "distill": "tsx src/distiller/cli.ts distill",
     "distill:stats": "tsx src/distiller/cli.ts stats",
+    "distill:trace": "tsx src/distiller/cli.ts distill-trace",
     "distill:dedupe": "tsx src/distiller/cli.ts dedupe",
-    "distill:prune": "tsx src/distiller/cli.ts prune",
-    "logger": "tsx src/logger/cli.ts",
-    "orchestrator": "tsx src/orchestrator/cli.ts"
+    "distill:prune": "tsx src/distiller/cli.ts prune"
   },
-  "keywords": ["evolver", "expbase", "sqlite", "storage"],
+  "keywords": ["evolver", "expbase", "sqlite", "storage", "claude-code"],
   "author": "Tom Nagengast (tnagengast@gmail.com)",
   "license": "ISC",
   "dependencies": {
