@@ -2,11 +2,10 @@
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup",
         "hooks": [
           {
             "type": "command",
-            "command": "bun $CLAUDE_PROJECT_DIR/hooks/session-start-v2.ts",
+            "command": "bun $CLAUDE_PROJECT_DIR/hooks/session-start.ts",
             "timeout": 10
           }
         ]
@@ -34,12 +33,23 @@
         ]
       }
     ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun $CLAUDE_PROJECT_DIR/hooks/session-end.ts",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "SessionEnd": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "bun $CLAUDE_PROJECT_DIR/hooks/session-end-v2.ts",
+            "command": "bun $CLAUDE_PROJECT_DIR/hooks/session-end.ts",
             "timeout": 10
           }
         ]
