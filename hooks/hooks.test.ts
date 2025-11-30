@@ -168,7 +168,7 @@ describe("Hooks Integration", () => {
     it("truncates large outputs", () => {
       function truncate(value: unknown, maxLen = 5000): unknown {
         if (typeof value === "string" && value.length > maxLen) {
-          return value.slice(0, maxLen) + "... [truncated]";
+          return `${value.slice(0, maxLen)}... [truncated]`;
         }
         if (typeof value === "object" && value !== null) {
           const str = JSON.stringify(value);

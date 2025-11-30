@@ -775,7 +775,7 @@ export class ExpBaseStorage {
       }
 
       // Get time range
-      let timeRange;
+      let timeRange: { earliest: string; latest: string } | undefined;
       const allDates = [
         ...principles.map((p) => p.created_at),
         ...traces.map((t) => t.created_at),

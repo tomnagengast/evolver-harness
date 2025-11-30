@@ -19,7 +19,8 @@ const STATE_DIR = expandTilde(
 const VERBOSE = process.env.EVOLVER_VERBOSE === "true";
 
 /** Get session-specific state file path */
-const getStateFile = (sessionId: string) => join(STATE_DIR, `${sessionId}.json`);
+const getStateFile = (sessionId: string) =>
+  join(STATE_DIR, `${sessionId}.json`);
 const MAX_PRINCIPLES = Number.parseInt(
   process.env.EVOLVER_PROMPT_MAX_PRINCIPLES || "5",
   10,
@@ -158,7 +159,10 @@ async function main() {
         state.injectedPrinciples = [
           ...new Set([...state.injectedPrinciples, ...newIds]),
         ];
-        await Bun.write(getStateFile(sessionId), JSON.stringify(state, null, 2));
+        await Bun.write(
+          getStateFile(sessionId),
+          JSON.stringify(state, null, 2),
+        );
       } catch {
         // Ignore state write errors
       }

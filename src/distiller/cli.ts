@@ -32,6 +32,8 @@ interface CLIConfig {
   model?: string;
   similarityThreshold?: number;
   embeddingProvider?: "openai" | "mock";
+  threshold?: number;
+  minUsage?: number;
 }
 
 /**
@@ -87,10 +89,10 @@ function parseCliArgs(): {
   };
 
   // Store parsed values for commands
-  (config as any).threshold = values.threshold
+  config.threshold = values.threshold
     ? Number.parseFloat(values.threshold as string)
     : undefined;
-  (config as any).minUsage = values["min-usage"]
+  config.minUsage = values["min-usage"]
     ? Number.parseInt(values["min-usage"] as string, 10)
     : undefined;
 
@@ -356,8 +358,8 @@ async function runDedupe(config: CLIConfig): Promise<void> {
  * Run prune command
  */
 function runPrune(config: CLIConfig): void {
-  const threshold = (config as any).threshold ?? 0.3;
-  const minUsage = (config as any).minUsage ?? 10;
+  const threshold = config.threshold ?? 0.3;
+  const minUsage = config.minUsage ?? 10;
 
   console.log("Pruning low-scoring principles...");
   console.log(`Database: ${config.dbPath}`);

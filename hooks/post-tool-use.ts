@@ -16,7 +16,8 @@ const STATE_DIR = expandTilde(
 const VERBOSE = process.env.EVOLVER_VERBOSE === "true";
 
 /** Get session-specific state file path */
-const getStateFile = (sessionId: string) => join(STATE_DIR, `${sessionId}.json`);
+const getStateFile = (sessionId: string) =>
+  join(STATE_DIR, `${sessionId}.json`);
 
 interface SessionState {
   sessionId: string;

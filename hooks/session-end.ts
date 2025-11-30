@@ -21,7 +21,8 @@ const STATE_DIR = expandTilde(
 const VERBOSE = process.env.EVOLVER_VERBOSE === "true";
 
 /** Get session-specific state file path */
-const getStateFile = (sessionId: string) => join(STATE_DIR, `${sessionId}.json`);
+const getStateFile = (sessionId: string) =>
+  join(STATE_DIR, `${sessionId}.json`);
 const AUTO_DISTILL = process.env.EVOLVER_AUTO_DISTILL !== "false";
 const DISTILL_THRESHOLD = Number.parseInt(
   process.env.EVOLVER_AUTO_DISTILL_THRESHOLD || "5",
@@ -223,8 +224,7 @@ async function main() {
   } catch (e) {
     if (VERBOSE) console.error("[evolver]", e);
     // Try to clean up state file if we have a session ID
-    const sessionId =
-      process.env.EVOLVER_SESSION_ID || "unknown";
+    const sessionId = process.env.EVOLVER_SESSION_ID || "unknown";
     if (sessionId !== "unknown") {
       await unlink(getStateFile(sessionId)).catch(() => {});
     }
