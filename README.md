@@ -12,6 +12,7 @@ This harness extends Claude Code with:
 2. **Hooks** - Native Claude Code hooks that inject principles and collect traces
 3. **Offline Distillation** - Extracts reusable principles from traces using Claude
 4. **Bayesian Scoring** - Tracks which principles work with formula `s(p) = (success_count + 1) / (use_count + 2)`
+5. **Intelligent Success Criteria** - Multi-dimensional outcome scoring with user feedback and fine-grained credit assignment
 
 ## Architecture
 
@@ -83,10 +84,10 @@ Native Claude Code hooks that handle the full session lifecycle:
 | Hook | File | Purpose |
 |------|------|---------|
 | SessionStart | `session-start.ts` | Retrieves top principles, outputs as context |
-| UserPromptSubmit | `prompt-submit.ts` | Task-aware retrieval from prompt keywords |
-| PostToolUse | `post-tool-use.ts` | Logs tool calls to session state |
-| Stop | `session-end.ts` | Saves trace after each response |
-| SessionEnd | `session-end.ts` | Saves trace when session terminates |
+| UserPromptSubmit | `prompt-submit.ts` | Task-aware retrieval + user feedback capture |
+| PostToolUse | `post-tool-use.ts` | Logs tool calls with success detection + principle context |
+| Stop | `session-end.ts` | Saves trace with multi-dimensional scoring |
+| SessionEnd | `session-end.ts` | Saves trace + assigns weighted credit to principles |
 
 ### Storage Layer (`src/storage/expbase.ts`)
 
@@ -185,6 +186,48 @@ Principles are stored as structured knowledge:
 2. Run deduplication: `bun run distill:dedupe`
 3. Prune low performers: `bun run distill:prune --threshold=0.3`
 
+## Intelligent Success Criteria
+
+The harness uses multi-dimensional outcome scoring inspired by recent research on credit assignment in LLM agents. Instead of binary success/failure, principles receive **weighted credit** (0-1) based on multiple signals.
+
+### Outcome Signals
+
+| Signal | Weight | Description |
+|--------|--------|-------------|
+| Tool Success Rate | 25% | Percentage of tool calls without errors |
+| User Sentiment | 35% | Implicit/explicit feedback from user prompts |
+| Made Edits | 20% | Whether code changes were made |
+| No Errors | 20% | Absence of errors in tool outputs |
+
+### User Feedback Detection
+
+The `prompt-submit` hook analyzes each user prompt for feedback signals:
+
+| Type | Examples | Sentiment |
+|------|----------|-----------|
+| Explicit Positive | "thanks", "perfect", "works" | 1.0 |
+| Explicit Negative | "wrong", "undo", "try again" | 0.0 |
+| Implicit Retry | Similar prompt to previous | 0.2 |
+| Implicit Continuation | New unrelated task | 0.7 |
+
+### Fine-Grained Credit Assignment
+
+Each principle receives individual credit based on:
+
+1. **Tool Success Context** - Which tools succeeded while the principle was active
+2. **Temporal Attribution** - Principles injected closer to successful tool calls get more credit
+3. **User Feedback** - Sentiment from subsequent user prompts
+
+```typescript
+// Credit formula for each principle
+credit = (base_outcome * 0.6 + tool_success_rate * 0.4) * 0.7 + user_sentiment * 0.3
+```
+
+This enables:
+- Principles that helped succeed get boosted
+- Principles active during failures get penalized
+- User satisfaction directly influences learning
+
 ## Key Insights from EvolveR
 
 This implementation captures these key ideas without RL training:
@@ -194,6 +237,7 @@ This implementation captures these key ideas without RL training:
 3. **Semantic Deduplication** - Merge similar principles via embeddings
 4. **Online Retrieval** - Context-aware principle injection via hooks
 5. **Continuous Improvement** - Usage tracking creates a feedback loop
+6. **Multi-Dimensional Success** - Rich outcome signals beyond binary success/failure
 
 ## MCP Server
 
@@ -266,6 +310,18 @@ evolver-harness/
 ├── .claude/settings.json  # Hook configuration
 └── .mcp.json              # MCP server registration
 ```
+
+## References
+
+This implementation draws inspiration from several research papers:
+
+| Paper | Key Contribution | Link |
+|-------|------------------|------|
+| **EvolveR** | Experience-augmented LLM agents with principle extraction and Bayesian scoring | [arXiv:2510.16079](https://arxiv.org/abs/2510.16079) |
+| **ExpeL** | Experiential learning with insight extraction from success/failure trajectories | [arXiv:2308.10144](https://arxiv.org/abs/2308.10144) |
+| **MT-GRPO** | Turn-level credit assignment separating action rewards from outcome rewards | [arXiv:2505.11821](https://arxiv.org/abs/2505.11821) |
+| **LaRe** | Latent reward models for multi-dimensional credit assignment | [arXiv:2412.11120](https://arxiv.org/abs/2412.11120) |
+| **RAGEN** | Multi-turn agent self-improvement with trajectory-level rewards | [arXiv:2504.20073](https://arxiv.org/abs/2504.20073) |
 
 ## License
 
