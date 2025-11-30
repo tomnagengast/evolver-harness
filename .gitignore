@@ -9,7 +9,5 @@ settings.local.json
 
 # Evolver state files
 .evolver/*.db*
-.evolver/session-state.json
 .evolver/sessions/*
-!.evolver/.gitkeep
-!.evolver/sessions/.gitkeep
+.gitkeep
