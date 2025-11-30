@@ -107,4 +107,3 @@ console.log("Database backed up");
 
 // Close the database when done
 storage.close();
-

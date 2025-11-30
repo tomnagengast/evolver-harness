@@ -8,11 +8,17 @@ import { unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const DB_PATH =
-  process.env.EVOLVER_DB_PATH || join(homedir(), ".evolver", "expbase.db");
-const STATE_FILE =
+/** Expand ~ to home directory in paths */
+const expandTilde = (p: string) =>
+  p.startsWith("~/") ? join(homedir(), p.slice(2)) : p;
+
+const DB_PATH = expandTilde(
+  process.env.EVOLVER_DB_PATH || join(homedir(), ".evolver", "expbase.db"),
+);
+const STATE_FILE = expandTilde(
   process.env.EVOLVER_STATE_FILE ||
-  join(homedir(), ".evolver", "session-state.json");
+    join(homedir(), ".evolver", "session-state.json"),
+);
 const VERBOSE = process.env.EVOLVER_VERBOSE === "true";
 
 interface SessionState {
@@ -147,4 +153,3 @@ async function main() {
 }
 
 main();
-

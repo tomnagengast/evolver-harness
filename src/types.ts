@@ -484,4 +484,3 @@ export type PrincipleUpdate = Partial<Omit<Principle, "id" | "created_at">> & {
 export type TraceUpdate = Partial<Omit<Trace, "id" | "created_at">> & {
   id: string;
 };
-

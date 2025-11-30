@@ -11,8 +11,13 @@
  * - stats - Show experience base statistics
  */
 
+import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
+
+/** Expand ~ to home directory in paths */
+const expandTilde = (p: string) =>
+  p.startsWith("~/") ? resolve(homedir(), p.slice(2)) : p;
 import { ExpBaseStorage } from "../storage/expbase.js";
 import { calculatePrincipleScore } from "../types.js";
 import { Distiller } from "./distiller.js";
@@ -61,10 +66,11 @@ function parseCliArgs(): {
   const args = positionals.slice(1);
 
   // Determine database path (use EVOLVER_DB_PATH to match hooks)
-  const dbPath =
+  const dbPath = expandTilde(
     values.db ||
-    process.env.EVOLVER_DB_PATH ||
-    resolve(process.env.HOME || "", ".evolver", "expbase.db");
+      process.env.EVOLVER_DB_PATH ||
+      resolve(process.env.HOME || "", ".evolver", "expbase.db"),
+  );
 
   const config: CLIConfig = {
     dbPath,
@@ -600,4 +606,3 @@ main().catch((error) => {
   );
   process.exit(1);
 });
-

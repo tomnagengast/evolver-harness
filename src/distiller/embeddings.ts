@@ -195,4 +195,3 @@ export function textSimilarity(textA: string, textB: string): number {
 
   return intersection.size / union.size;
 }
-

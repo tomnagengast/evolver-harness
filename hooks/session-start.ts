@@ -6,8 +6,13 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const DB_PATH =
-  process.env.EVOLVER_DB_PATH || join(homedir(), ".evolver", "expbase.db");
+/** Expand ~ to home directory in paths */
+const expandTilde = (p: string) =>
+  p.startsWith("~/") ? join(homedir(), p.slice(2)) : p;
+
+const DB_PATH = expandTilde(
+  process.env.EVOLVER_DB_PATH || join(homedir(), ".evolver", "expbase.db"),
+);
 const VERBOSE = process.env.EVOLVER_VERBOSE === "true";
 const MAX_PRINCIPLES = Number.parseInt(
   process.env.EVOLVER_MAX_PRINCIPLES || "10",

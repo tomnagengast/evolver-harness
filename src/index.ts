@@ -21,4 +21,3 @@ export { ExpBaseStorage } from "./storage/expbase.js";
 
 // Types (core - used by all modules)
 export * from "./types.js";
-
