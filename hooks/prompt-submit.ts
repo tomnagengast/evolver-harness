@@ -6,6 +6,22 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+// Load .env file from project directory
+const envFile = Bun.file(join(import.meta.dir, "../.env"));
+if (await envFile.exists()) {
+  const envContent = await envFile.text();
+  for (const line of envContent.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith("#")) {
+      const [key, ...valueParts] = trimmed.split("=");
+      const value = valueParts.join("=");
+      if (key && value && !process.env[key]) {
+        process.env[key] = value;
+      }
+    }
+  }
+}
+
 /** Expand ~ to home directory in paths */
 const expandTilde = (p: string) =>
   p.startsWith("~/") ? join(homedir(), p.slice(2)) : p;
