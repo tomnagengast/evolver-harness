@@ -195,6 +195,38 @@ This implementation captures these key ideas without RL training:
 4. **Online Retrieval** - Context-aware principle injection via hooks
 5. **Continuous Improvement** - Usage tracking creates a feedback loop
 
+## MCP Server
+
+The harness exposes an MCP server (`evolver`) for runtime principle access. It's automatically registered in `.mcp.json`.
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `search_principles` | Search principles by query/tags with optional exploration |
+| `rate_principle` | Provide feedback on principle helpfulness |
+| `list_tags` | Discover available principle categories |
+| `list_loaded_principles` | View principles injected at session start |
+
+### Usage Examples
+
+```typescript
+// Search for relevant principles
+search_principles({
+  query: "debugging failing tests",
+  tags: ["debugging"],
+  include_exploration: true,
+  limit: 5
+})
+
+// Rate a principle after use
+rate_principle({
+  principle_id: "abc123",
+  was_helpful: true,
+  context: "Helped identify root cause quickly"
+})
+```
+
 ## Development
 
 ```bash
@@ -210,6 +242,29 @@ bun run typecheck
 # Lint and format
 bun run lint
 bun run format
+```
+
+## Project Structure
+
+```
+evolver-harness/
+├── hooks/                 # Claude Code lifecycle hooks
+│   ├── session-start.ts   # Inject top principles + contextual retrieval
+│   ├── prompt-submit.ts   # Task-aware principle retrieval per prompt
+│   ├── post-tool-use.ts   # Log tool calls to session state
+│   └── session-end.ts     # Save trace + trigger distillation
+├── src/
+│   ├── storage/expbase.ts # SQLite storage layer
+│   ├── distiller/         # Offline principle extraction
+│   │   ├── distiller.ts   # Core distillation logic
+│   │   ├── cli.ts         # CLI interface
+│   │   ├── embeddings.ts  # OpenAI embedding support
+│   │   └── prompts.ts     # Distillation prompts
+│   ├── mcp/server.ts      # MCP server for principle tools
+│   ├── index.ts           # Public exports
+│   └── types.ts           # Core TypeScript interfaces
+├── .claude/settings.json  # Hook configuration
+└── .mcp.json              # MCP server registration
 ```
 
 ## License
