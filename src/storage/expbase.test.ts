@@ -169,7 +169,7 @@ describe("ExpBaseStorage", () => {
       assert.strictEqual(scores[1].rank, 2);
     });
 
-    it("recordUsage increments counters", () => {
+    it("recordUsage increments counters with boolean", () => {
       const principle = storage.addPrinciple({
         text: "Test principle",
         tags: [],
@@ -183,6 +183,121 @@ describe("ExpBaseStorage", () => {
       const updated = storage.getPrinciple(principle.id);
       assert.strictEqual(updated?.use_count, 2);
       assert.strictEqual(updated?.success_count, 1);
+    });
+
+    it("recordUsage accepts fractional credit values", () => {
+      const principle = storage.addPrinciple({
+        text: "Test principle",
+        tags: [],
+        triples: [],
+        examples: [],
+      });
+
+      // Record with fractional credits
+      storage.recordUsage(principle.id, undefined, 0.8);
+      storage.recordUsage(principle.id, undefined, 0.6);
+      storage.recordUsage(principle.id, undefined, 0.4);
+
+      const updated = storage.getPrinciple(principle.id);
+      assert.strictEqual(updated?.use_count, 3);
+      // success_count should be 0.8 + 0.6 + 0.4 = 1.8
+      assert.ok(Math.abs((updated?.success_count ?? 0) - 1.8) < 0.01);
+    });
+
+    it("recordUsage clamps credit to 0-1 range", () => {
+      const principle = storage.addPrinciple({
+        text: "Test principle",
+        tags: [],
+        triples: [],
+        examples: [],
+      });
+
+      // Attempt to record out-of-range credits
+      storage.recordUsage(principle.id, undefined, 1.5); // Should clamp to 1.0
+      storage.recordUsage(principle.id, undefined, -0.5); // Should clamp to 0.0
+
+      const updated = storage.getPrinciple(principle.id);
+      assert.strictEqual(updated?.use_count, 2);
+      assert.strictEqual(updated?.success_count, 1.0); // 1.0 + 0.0
+    });
+
+    it("recordUsage returns event with credit field", () => {
+      const principle = storage.addPrinciple({
+        text: "Test principle",
+        tags: [],
+        triples: [],
+        examples: [],
+      });
+
+      const event = storage.recordUsage(principle.id, undefined, 0.75);
+
+      assert.strictEqual(event.credit, 0.75);
+      assert.strictEqual(event.was_successful, true); // 0.75 >= 0.5
+      assert.strictEqual(event.principle_id, principle.id);
+    });
+
+    it("recordUsage treats credit < 0.5 as unsuccessful", () => {
+      const principle = storage.addPrinciple({
+        text: "Test principle",
+        tags: [],
+        triples: [],
+        examples: [],
+      });
+
+      const event = storage.recordUsage(principle.id, undefined, 0.3);
+
+      assert.strictEqual(event.credit, 0.3);
+      assert.strictEqual(event.was_successful, false); // 0.3 < 0.5
+    });
+
+    it("getPrincipleUsageHistory includes credit field", () => {
+      const principle = storage.addPrinciple({
+        text: "Test principle",
+        tags: [],
+        triples: [],
+        examples: [],
+      });
+
+      storage.recordUsage(principle.id, undefined, 0.85);
+      storage.recordUsage(principle.id, undefined, 0.25);
+
+      const history = storage.getPrincipleUsageHistory(principle.id);
+
+      assert.strictEqual(history.length, 2);
+      // Check that credit values are present (order may vary based on timing)
+      const credits = history.map((h) => h.credit).sort();
+      assert.strictEqual(credits[0], 0.25);
+      assert.strictEqual(credits[1], 0.85);
+
+      // Verify was_successful correlates with credit >= 0.5
+      for (const h of history) {
+        assert.strictEqual(h.was_successful, h.credit >= 0.5);
+      }
+    });
+
+    it("Bayesian score works with fractional success_count", () => {
+      const principle = storage.addPrinciple({
+        text: "Test principle",
+        tags: [],
+        triples: [],
+        examples: [],
+      });
+
+      // Record 5 uses with varying credit
+      storage.recordUsage(principle.id, undefined, 0.9);
+      storage.recordUsage(principle.id, undefined, 0.7);
+      storage.recordUsage(principle.id, undefined, 0.8);
+      storage.recordUsage(principle.id, undefined, 0.6);
+      storage.recordUsage(principle.id, undefined, 0.5);
+
+      const updated = storage.getPrinciple(principle.id);
+      assert.strictEqual(updated?.use_count, 5);
+      // success_count = 0.9 + 0.7 + 0.8 + 0.6 + 0.5 = 3.5
+      assert.ok(Math.abs((updated?.success_count ?? 0) - 3.5) < 0.01);
+
+      // Score = (3.5 + 1) / (5 + 2) = 4.5 / 7 ≈ 0.643
+      const score = storage.getPrincipleScore(principle.id);
+      assert.ok(Math.abs(score - 0.643) < 0.01);
     });
   });
 

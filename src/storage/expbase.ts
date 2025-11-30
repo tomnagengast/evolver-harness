@@ -26,6 +26,8 @@ export interface PrincipleUsageEvent {
   principle_id: string;
   trace_id?: string;
   was_successful: boolean;
+  /** Credit score (0-1) for weighted success tracking */
+  credit: number;
   created_at: string;
 }
 
@@ -135,11 +137,21 @@ export class ExpBaseStorage {
           principle_id TEXT NOT NULL,
           trace_id TEXT,
           was_successful INTEGER NOT NULL, -- 0 or 1 (SQLite boolean)
+          credit REAL DEFAULT 0.5, -- Weighted credit (0-1)
           created_at TEXT NOT NULL,
           FOREIGN KEY (principle_id) REFERENCES principles(id) ON DELETE CASCADE,
           FOREIGN KEY (trace_id) REFERENCES traces(id) ON DELETE SET NULL
         )
       `);
+
+      // Migration: Add credit column if it doesn't exist
+      try {
+        this.db.exec(
+          "ALTER TABLE principle_usage ADD COLUMN credit REAL DEFAULT 0.5",
+        );
+      } catch {
+        // Column already exists, ignore
+      }
 
       // Create indexes for efficient queries
       this.db.exec(`
@@ -573,13 +585,27 @@ export class ExpBaseStorage {
   }
 
   /**
-   * Record a principle usage event
+   * Record a principle usage event with weighted credit
+   *
+   * @param principleId - The principle that was used
+   * @param traceId - Optional trace ID for linking
+   * @param creditOrSuccess - Either a credit score (0-1) or boolean for backward compat
    */
   recordUsage(
     principleId: string,
     traceId: string | undefined,
-    wasSuccessful: boolean,
+    creditOrSuccess: number | boolean,
   ): PrincipleUsageEvent {
+    // Normalize to credit score (0-1)
+    const credit =
+      typeof creditOrSuccess === "boolean"
+        ? creditOrSuccess
+          ? 1.0
+          : 0.0
+        : Math.max(0, Math.min(1, creditOrSuccess));
+
+    const wasSuccessful = credit >= 0.5;
+
     const runTransaction = this.db.transaction(() => {
       // Create usage event
       const event: PrincipleUsageEvent = {
@@ -587,12 +613,13 @@ export class ExpBaseStorage {
         principle_id: principleId,
         trace_id: traceId,
         was_successful: wasSuccessful,
+        credit,
         created_at: new Date().toISOString(),
       };
 
       const usageStmt = this.db.query(`
-        INSERT INTO principle_usage (id, principle_id, trace_id, was_successful, created_at)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO principle_usage (id, principle_id, trace_id, was_successful, credit, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
       `);
 
       usageStmt.run(
@@ -600,10 +627,12 @@ export class ExpBaseStorage {
         event.principle_id,
         event.trace_id ?? null,
         wasSuccessful ? 1 : 0,
+        credit,
         event.created_at,
       );
 
-      // Update principle counters
+      // Update principle counters with weighted credit
+      // success_count now accumulates fractional credits
       const updateStmt = this.db.query(`
         UPDATE principles
         SET use_count = use_count + 1,
@@ -612,7 +641,7 @@ export class ExpBaseStorage {
         WHERE id = ?
       `);
 
-      updateStmt.run(wasSuccessful ? 1 : 0, event.created_at, principleId);
+      updateStmt.run(credit, event.created_at, principleId);
 
       return event;
     });
@@ -860,6 +889,8 @@ export class ExpBaseStorage {
         principle_id: row.principle_id as string,
         trace_id: row.trace_id as string | undefined,
         was_successful: row.was_successful === 1,
+        credit:
+          (row.credit as number) ?? (row.was_successful === 1 ? 1.0 : 0.0),
         created_at: row.created_at as string,
       }));
     } catch (error) {

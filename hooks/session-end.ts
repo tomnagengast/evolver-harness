@@ -1,12 +1,18 @@
 #!/usr/bin/env bun
 
 /**
- * SessionEnd Hook - Saves trace to ExpBase
+ * SessionEnd Hook - Saves trace with multi-dimensional scoring and credit assignment
  */
 
 import { unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type {
+  EnrichedTraceOutcome,
+  OutcomeSignals,
+  PrincipleCredit,
+  UserFeedback,
+} from "../src/types.js";
 
 // Load .env file from project directory
 const envFile = Bun.file(join(import.meta.dir, "../.env"));
@@ -45,17 +51,23 @@ const DISTILL_THRESHOLD = Number.parseInt(
   10,
 );
 
+interface EnrichedToolCall {
+  tool: string;
+  input: Record<string, unknown>;
+  output: unknown;
+  timestamp: string;
+  succeeded?: boolean;
+  active_principles?: string[];
+  prompt_index?: number;
+}
+
 interface SessionState {
   sessionId: string;
   startTime: string;
   prompts?: string[];
   injectedPrinciples?: string[];
-  toolCalls: Array<{
-    tool: string;
-    input: Record<string, unknown>;
-    output: unknown;
-    timestamp: string;
-  }>;
+  userFeedback?: UserFeedback[];
+  toolCalls: EnrichedToolCall[];
 }
 
 function extractTaskSummary(prompts: string[]): string {
@@ -102,6 +114,177 @@ function extractProblemDescription(
   return parts.join(". ");
 }
 
+/** Compute multi-dimensional outcome signals from session state */
+function computeOutcomeSignals(state: SessionState): OutcomeSignals {
+  const toolCalls = state.toolCalls || [];
+  const userFeedback = state.userFeedback || [];
+
+  // Tool success rate (use succeeded field if available, else infer from output)
+  const toolsWithSuccess = toolCalls.filter((tc) => tc.succeeded !== undefined);
+  let tool_success_rate: number;
+  if (toolsWithSuccess.length > 0) {
+    tool_success_rate =
+      toolsWithSuccess.filter((tc) => tc.succeeded).length /
+      toolsWithSuccess.length;
+  } else {
+    // Fall back to error pattern matching
+    const succeededTools = toolCalls.filter((tc) => {
+      const out =
+        typeof tc.output === "string" ? tc.output : JSON.stringify(tc.output);
+      return !/error|failed/i.test(out);
+    });
+    tool_success_rate =
+      toolCalls.length > 0 ? succeededTools.length / toolCalls.length : 1;
+  }
+
+  // Error count
+  const error_count = toolCalls.filter((tc) => {
+    if (tc.succeeded === false) return true;
+    const out =
+      typeof tc.output === "string" ? tc.output : JSON.stringify(tc.output);
+    return /error|failed/i.test(out);
+  }).length;
+
+  // Edit metrics
+  const editTools = ["Edit", "Write", "NotebookEdit"];
+  const edits = toolCalls.filter((tc) => editTools.includes(tc.tool));
+  const made_edits = edits.length > 0;
+  const edit_count = edits.length;
+
+  // Files touched
+  const files = new Set<string>();
+  for (const tc of edits) {
+    const filePath =
+      (tc.input?.file_path as string) || (tc.input?.path as string);
+    if (filePath) files.add(filePath);
+  }
+  const files_touched = files.size;
+
+  // User feedback average sentiment
+  const avg_sentiment =
+    userFeedback.length > 0
+      ? userFeedback.reduce((sum, f) => sum + f.sentiment, 0) /
+        userFeedback.length
+      : 0.5;
+
+  return {
+    tool_success_rate,
+    error_count,
+    made_edits,
+    edit_count,
+    files_touched,
+    user_feedback: userFeedback,
+    avg_sentiment,
+    session_continued: toolCalls.length > 0,
+    prompt_count: state.prompts?.length || 0,
+  };
+}
+
+/** Compute enriched outcome with multi-dimensional scoring */
+function inferEnrichedOutcome(state: SessionState): EnrichedTraceOutcome {
+  const signals = computeOutcomeSignals(state);
+
+  // Weighted score from multiple dimensions
+  const weights = {
+    tool_success: 0.25,
+    user_sentiment: 0.35,
+    made_edits: 0.2,
+    no_errors: 0.2,
+  };
+
+  const score =
+    weights.tool_success * signals.tool_success_rate +
+    weights.user_sentiment * signals.avg_sentiment +
+    weights.made_edits * (signals.made_edits ? 0.8 : 0.3) +
+    weights.no_errors *
+      (signals.error_count === 0
+        ? 1
+        : Math.max(0, 1 - signals.error_count * 0.15));
+
+  // Determine status from score
+  let status: "success" | "failure" | "partial";
+  if (score >= 0.6) status = "success";
+  else if (score <= 0.35) status = "failure";
+  else status = "partial";
+
+  return {
+    status,
+    score,
+    signals,
+    principle_credits: [], // Filled in by calculatePrincipleCredits
+  };
+}
+
+/** Calculate per-principle credit based on tool success and user feedback */
+function calculatePrincipleCredits(
+  state: SessionState,
+  outcome: EnrichedTraceOutcome,
+): PrincipleCredit[] {
+  const credits: PrincipleCredit[] = [];
+  const principleIds = state.injectedPrinciples || [];
+
+  if (principleIds.length === 0) return credits;
+
+  // Build principle -> tool success mapping
+  const principleStats = new Map<
+    string,
+    { succeeded: number; failed: number; total: number }
+  >();
+
+  for (const pId of principleIds) {
+    principleStats.set(pId, { succeeded: 0, failed: 0, total: 0 });
+  }
+
+  // For each tool call, credit active principles
+  for (const tc of state.toolCalls || []) {
+    // Use active_principles if available, else assume all principles were active
+    const activePrinciples = tc.active_principles || principleIds;
+    for (const pId of activePrinciples) {
+      const stats = principleStats.get(pId);
+      if (stats) {
+        stats.total++;
+        if (tc.succeeded !== false) stats.succeeded++;
+        else stats.failed++;
+      }
+    }
+  }
+
+  // Calculate credit for each principle
+  for (const pId of principleIds) {
+    const stats = principleStats.get(pId);
+    if (!stats) continue;
+    const reasons: string[] = [];
+
+    // Base credit from outcome
+    let credit = outcome.score;
+
+    // Adjust by tool success rate for this principle
+    if (stats.total > 0) {
+      const principleToolRate = stats.succeeded / stats.total;
+      credit = credit * 0.6 + principleToolRate * 0.4;
+      reasons.push(`tools=${(principleToolRate * 100).toFixed(0)}%`);
+    }
+
+    // Boost/penalize based on user feedback
+    const feedback = outcome.signals.user_feedback;
+    if (feedback.length > 0) {
+      const avgSentiment =
+        feedback.reduce((s, f) => s + f.sentiment, 0) / feedback.length;
+      credit = credit * 0.7 + avgSentiment * 0.3;
+      reasons.push(`sentiment=${(avgSentiment * 100).toFixed(0)}%`);
+    }
+
+    credits.push({
+      principle_id: pId,
+      credit: Math.max(0, Math.min(1, credit)),
+      reasoning: reasons.join(", ") || "base_outcome",
+    });
+  }
+
+  return credits;
+}
+
+/** Legacy inferOutcome for backward compatibility with trace storage */
 function inferOutcome(toolCalls: SessionState["toolCalls"]) {
   if (toolCalls.length === 0) return { status: "partial" as const, score: 0.5 };
 
@@ -183,6 +366,15 @@ async function main() {
     if (await dbFile.exists()) {
       const { ExpBaseStorage } = await import("../src/storage/expbase.js");
       const storage = new ExpBaseStorage({ dbPath: DB_PATH });
+
+      // Compute enriched outcome with multi-dimensional signals
+      const enrichedOutcome = inferEnrichedOutcome(state);
+
+      // Calculate per-principle credits
+      const credits = calculatePrincipleCredits(state, enrichedOutcome);
+      enrichedOutcome.principle_credits = credits;
+
+      // Use legacy outcome for trace storage (backward compat)
       const outcome = inferOutcome(state.toolCalls);
 
       const durationMs =
@@ -198,7 +390,7 @@ async function main() {
         ),
         tool_calls: state.toolCalls,
         intermediate_thoughts: state.prompts || [],
-        final_answer: `Session ended with ${outcome.status}`,
+        final_answer: `Session ended with ${enrichedOutcome.status} (score: ${enrichedOutcome.score.toFixed(2)})`,
         outcome,
         duration_ms: durationMs,
         model_used: process.env.CLAUDE_MODEL || "unknown",
@@ -206,22 +398,28 @@ async function main() {
         agent_id: process.env.CLAUDE_AGENT_ID,
       });
 
-      if (VERBOSE) console.error(`[evolver] Saved trace: ${trace.id}`);
+      if (VERBOSE) {
+        console.error(`[evolver] Saved trace: ${trace.id}`);
+        console.error(
+          `[evolver] Outcome: ${enrichedOutcome.status} (score=${enrichedOutcome.score.toFixed(2)}, ` +
+            `tools=${(enrichedOutcome.signals.tool_success_rate * 100).toFixed(0)}%, ` +
+            `sentiment=${(enrichedOutcome.signals.avg_sentiment * 100).toFixed(0)}%)`,
+        );
+      }
 
-      // Record usage for all injected principles
-      const wasSuccessful = outcome.status === "success";
-      if (state.injectedPrinciples && state.injectedPrinciples.length > 0) {
-        for (const principleId of state.injectedPrinciples) {
+      // Record weighted credit for each principle
+      if (credits.length > 0) {
+        for (const { principle_id, credit, reasoning } of credits) {
           try {
-            storage.recordUsage(principleId, trace.id, wasSuccessful);
+            storage.recordUsage(principle_id, trace.id, credit);
+            if (VERBOSE) {
+              console.error(
+                `[evolver] ${principle_id}: credit=${credit.toFixed(2)} (${reasoning})`,
+              );
+            }
           } catch {
             // Principle may have been deleted, ignore
           }
-        }
-        if (VERBOSE) {
-          console.error(
-            `[evolver] Recorded usage for ${state.injectedPrinciples.length} principles (success: ${wasSuccessful})`,
-          );
         }
       }
 
