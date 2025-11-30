@@ -113,24 +113,6 @@ async function main() {
 
     if (keywords.length === 0) process.exit(0);
 
-    // Store prompt in session state for task extraction
-    const sessionId = input?.session_id || process.env.EVOLVER_SESSION_ID;
-    if (sessionId) {
-      const stateFile = Bun.file(STATE_FILE);
-      try {
-        let state = { sessionId, prompts: [] as string[], toolCalls: [] };
-        if (await stateFile.exists()) {
-          const existing = await stateFile.json().catch(() => null);
-          if (existing?.sessionId === sessionId) state = existing;
-        }
-        if (!state.prompts) state.prompts = [];
-        state.prompts.push(prompt);
-        await Bun.write(STATE_FILE, JSON.stringify(state, null, 2));
-      } catch {
-        // Ignore state write errors
-      }
-    }
-
     const dbFile = Bun.file(DB_PATH);
     if (!(await dbFile.exists())) process.exit(0);
 
@@ -150,6 +132,35 @@ async function main() {
       .map((p) => ({ p, score: (p.success_count + 1) / (p.use_count + 2) }))
       .sort((a, b) => b.score - a.score)
       .slice(0, MAX_PRINCIPLES);
+
+    // Store prompt and injected principle IDs in session state
+    const sessionId = input?.session_id || process.env.EVOLVER_SESSION_ID;
+    if (sessionId) {
+      const stateFile = Bun.file(STATE_FILE);
+      try {
+        let state = {
+          sessionId,
+          prompts: [] as string[],
+          toolCalls: [] as unknown[],
+          injectedPrinciples: [] as string[],
+        };
+        if (await stateFile.exists()) {
+          const existing = await stateFile.json().catch(() => null);
+          if (existing?.sessionId === sessionId) state = existing;
+        }
+        if (!state.prompts) state.prompts = [];
+        if (!state.injectedPrinciples) state.injectedPrinciples = [];
+        state.prompts.push(prompt);
+        // Add any new principle IDs (deduped)
+        const newIds = principles.map(({ p }) => p.id);
+        state.injectedPrinciples = [
+          ...new Set([...state.injectedPrinciples, ...newIds]),
+        ];
+        await Bun.write(STATE_FILE, JSON.stringify(state, null, 2));
+      } catch {
+        // Ignore state write errors
+      }
+    }
 
     if (principles.length === 0) process.exit(0);
 

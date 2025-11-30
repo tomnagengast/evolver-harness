@@ -30,6 +30,7 @@ interface SessionState {
   sessionId: string;
   startTime: string;
   prompts?: string[];
+  injectedPrinciples?: string[];
   toolCalls: Array<{
     tool: string;
     input: unknown;
@@ -187,6 +188,23 @@ async function main() {
       });
 
       if (VERBOSE) console.error(`[evolver] Saved trace: ${trace.id}`);
+
+      // Record usage for all injected principles
+      const wasSuccessful = outcome.status === "success";
+      if (state.injectedPrinciples && state.injectedPrinciples.length > 0) {
+        for (const principleId of state.injectedPrinciples) {
+          try {
+            storage.recordUsage(principleId, trace.id, wasSuccessful);
+          } catch {
+            // Principle may have been deleted, ignore
+          }
+        }
+        if (VERBOSE) {
+          console.error(
+            `[evolver] Recorded usage for ${state.injectedPrinciples.length} principles (success: ${wasSuccessful})`,
+          );
+        }
+      }
 
       // Auto-distill if enabled and threshold reached
       if (AUTO_DISTILL) {
