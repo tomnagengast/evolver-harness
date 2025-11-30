@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun $CLAUDE_PROJECT_DIR/hooks/session-start.ts",
+            "command": "bun --cwd $CLAUDE_PROJECT_DIR hooks/session-start.ts",
             "timeout": 10
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun $CLAUDE_PROJECT_DIR/hooks/prompt-submit.ts",
+            "command": "bun --cwd $CLAUDE_PROJECT_DIR hooks/prompt-submit.ts",
             "timeout": 5
           }
         ]
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun $CLAUDE_PROJECT_DIR/hooks/post-tool-use.ts",
+            "command": "bun --cwd $CLAUDE_PROJECT_DIR hooks/post-tool-use.ts",
             "timeout": 5
           }
         ]
@@ -38,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun $CLAUDE_PROJECT_DIR/hooks/session-end.ts",
+            "command": "bun --cwd $CLAUDE_PROJECT_DIR hooks/session-end.ts",
             "timeout": 10
           }
         ]
@@ -49,7 +49,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun $CLAUDE_PROJECT_DIR/hooks/session-end.ts",
+            "command": "bun --cwd $CLAUDE_PROJECT_DIR hooks/session-end.ts",
             "timeout": 10
           }
         ]
