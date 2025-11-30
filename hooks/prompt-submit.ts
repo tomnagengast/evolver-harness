@@ -8,9 +8,17 @@ import { join } from "node:path";
 
 const DB_PATH =
   process.env.EVOLVER_DB_PATH || join(homedir(), ".evolver", "expbase.db");
+const STATE_FILE =
+  process.env.EVOLVER_STATE_FILE ||
+  join(homedir(), ".evolver", "session-state.json");
 const VERBOSE = process.env.EVOLVER_VERBOSE === "true";
-const MAX_PRINCIPLES = 5;
-const MIN_SCORE = 0.5;
+const MAX_PRINCIPLES = Number.parseInt(
+  process.env.EVOLVER_PROMPT_MAX_PRINCIPLES || "5",
+  10,
+);
+const MIN_SCORE = Number.parseFloat(
+  process.env.EVOLVER_PROMPT_MIN_SCORE || "0.5",
+);
 
 const STOP_WORDS = new Set([
   "the",
@@ -98,6 +106,24 @@ async function main() {
     ];
 
     if (keywords.length === 0) process.exit(0);
+
+    // Store prompt in session state for task extraction
+    const sessionId = input?.session_id || process.env.EVOLVER_SESSION_ID;
+    if (sessionId) {
+      const stateFile = Bun.file(STATE_FILE);
+      try {
+        let state = { sessionId, prompts: [] as string[], toolCalls: [] };
+        if (await stateFile.exists()) {
+          const existing = await stateFile.json().catch(() => null);
+          if (existing?.sessionId === sessionId) state = existing;
+        }
+        if (!state.prompts) state.prompts = [];
+        state.prompts.push(prompt);
+        await Bun.write(STATE_FILE, JSON.stringify(state, null, 2));
+      } catch {
+        // Ignore state write errors
+      }
+    }
 
     const dbFile = Bun.file(DB_PATH);
     if (!(await dbFile.exists())) process.exit(0);

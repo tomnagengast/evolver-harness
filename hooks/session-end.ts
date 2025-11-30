@@ -18,12 +18,57 @@ const VERBOSE = process.env.EVOLVER_VERBOSE === "true";
 interface SessionState {
   sessionId: string;
   startTime: string;
+  prompts?: string[];
   toolCalls: Array<{
     tool: string;
     input: unknown;
     output: unknown;
     timestamp: string;
   }>;
+}
+
+function extractTaskSummary(prompts: string[]): string {
+  if (!prompts || prompts.length === 0) return "Claude Code session";
+
+  // Use first substantive prompt as task summary
+  const firstPrompt = prompts[0];
+  if (!firstPrompt || firstPrompt.length < 10) return "Claude Code session";
+
+  // Truncate to reasonable length for summary
+  const maxLen = 200;
+  if (firstPrompt.length <= maxLen) return firstPrompt;
+
+  // Find natural break point
+  const truncated = firstPrompt.slice(0, maxLen);
+  const lastSpace = truncated.lastIndexOf(" ");
+  return lastSpace > maxLen / 2
+    ? `${truncated.slice(0, lastSpace)}...`
+    : `${truncated}...`;
+}
+
+function extractProblemDescription(
+  prompts: string[],
+  toolCalls: SessionState["toolCalls"],
+): string {
+  const parts: string[] = [];
+
+  if (prompts && prompts.length > 0) {
+    parts.push(`${prompts.length} prompt(s)`);
+  }
+
+  parts.push(`${toolCalls.length} tool call(s)`);
+
+  // Identify key tools used
+  const toolTypes = new Set(toolCalls.map((tc) => tc.tool));
+  if (toolTypes.size > 0) {
+    const notable = ["Edit", "Write", "Bash", "Read", "Grep", "Glob"];
+    const used = notable.filter((t) => toolTypes.has(t));
+    if (used.length > 0) {
+      parts.push(`Tools: ${used.join(", ")}`);
+    }
+  }
+
+  return parts.join(". ");
 }
 
 function inferOutcome(toolCalls: SessionState["toolCalls"]) {
@@ -68,15 +113,19 @@ async function main() {
       const storage = new ExpBaseStorage({ dbPath: DB_PATH });
       const outcome = inferOutcome(state.toolCalls);
 
-      const durationMs = state.toolCalls.length > 0
-        ? Date.now() - new Date(state.startTime).getTime()
-        : 0;
+      const durationMs =
+        state.toolCalls.length > 0
+          ? Date.now() - new Date(state.startTime).getTime()
+          : 0;
 
       const trace = storage.addTrace({
-        task_summary: "Claude Code session",
-        problem_description: `Session with ${state.toolCalls.length} tool calls`,
+        task_summary: extractTaskSummary(state.prompts || []),
+        problem_description: extractProblemDescription(
+          state.prompts || [],
+          state.toolCalls,
+        ),
         tool_calls: state.toolCalls,
-        intermediate_thoughts: [],
+        intermediate_thoughts: state.prompts || [],
         final_answer: `Session ended with ${outcome.status}`,
         outcome,
         duration_ms: durationMs,

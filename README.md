@@ -161,6 +161,8 @@ Principles are stored as structured knowledge:
 | `EVOLVER_STATE_FILE` | `~/.evolver/session-state.json` | Session state for hooks |
 | `EVOLVER_MAX_PRINCIPLES` | `10` | Max principles to inject at session start |
 | `EVOLVER_MIN_SCORE` | `0.5` | Min Bayesian score for principle injection |
+| `EVOLVER_PROMPT_MAX_PRINCIPLES` | `5` | Max principles per prompt (UserPromptSubmit) |
+| `EVOLVER_PROMPT_MIN_SCORE` | `0.5` | Min score for prompt retrieval |
 | `EVOLVER_VERBOSE` | `false` | Enable verbose logging |
 | `ANTHROPIC_API_KEY` | - | Required for distillation |
 | `OPENAI_API_KEY` | - | Required for embeddings |
