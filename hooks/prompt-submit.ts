@@ -1,10 +1,11 @@
 #!/usr/bin/env bun
 /**
- * UserPromptSubmit Hook - Task-aware principle retrieval
+ * UserPromptSubmit Hook - Task-aware principle retrieval + user feedback capture
  */
 
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { UserFeedback } from "../src/types.js";
 
 // Load .env file from project directory
 const envFile = Bun.file(join(import.meta.dir, "../.env"));
@@ -105,6 +106,111 @@ const STOP_WORDS = new Set([
   "my",
 ]);
 
+/** Patterns for detecting explicit user feedback */
+const FEEDBACK_PATTERNS = {
+  explicit_positive: [
+    /\b(thanks|thank you|perfect|great|awesome|works|excellent|nice|good job|well done|thx|ty)\b/i,
+    /^(yes|yep|yeah|correct|exactly|right)[.!]?$/i,
+    /\bthat('s| is) (right|correct|perfect|great|exactly what)\b/i,
+  ],
+  explicit_negative: [
+    /\b(wrong|incorrect|undo|revert|rollback|broken|failed|doesn't work|didn't work)\b/i,
+    /\b(try again|start over|that's not|not what i|go back)\b/i,
+    /^no[,.\s]|^nope\b/i,
+  ],
+};
+
+/** Compute keyword overlap (Jaccard similarity) between two strings */
+function computeKeywordOverlap(a: string, b: string): number {
+  const wordsA = new Set(
+    a
+      .toLowerCase()
+      .split(/\W+/)
+      .filter((w) => w.length > 3 && !STOP_WORDS.has(w)),
+  );
+  const wordsB = new Set(
+    b
+      .toLowerCase()
+      .split(/\W+/)
+      .filter((w) => w.length > 3 && !STOP_WORDS.has(w)),
+  );
+  if (wordsA.size === 0 || wordsB.size === 0) return 0;
+
+  const intersection = [...wordsA].filter((w) => wordsB.has(w)).length;
+  const union = new Set([...wordsA, ...wordsB]).size;
+  return intersection / union;
+}
+
+/** Analyze user feedback from current prompt based on previous context */
+function analyzeUserFeedback(
+  currentPrompt: string,
+  previousPrompts: string[],
+  hasRecentToolCalls: boolean,
+): UserFeedback {
+  const promptIndex = previousPrompts.length;
+
+  // Check explicit positive
+  for (const pattern of FEEDBACK_PATTERNS.explicit_positive) {
+    if (pattern.test(currentPrompt)) {
+      return {
+        sentiment: 1.0,
+        type: "explicit_positive",
+        confidence: 0.9,
+        prompt_index: promptIndex,
+        matched_patterns: [pattern.source],
+      };
+    }
+  }
+
+  // Check explicit negative
+  for (const pattern of FEEDBACK_PATTERNS.explicit_negative) {
+    if (pattern.test(currentPrompt)) {
+      return {
+        sentiment: 0.0,
+        type: "explicit_negative",
+        confidence: 0.9,
+        prompt_index: promptIndex,
+        matched_patterns: [pattern.source],
+      };
+    }
+  }
+
+  // Check implicit retry (similar to recent request)
+  if (previousPrompts.length > 0) {
+    const lastPrompt = previousPrompts[previousPrompts.length - 1];
+    const similarity = computeKeywordOverlap(currentPrompt, lastPrompt);
+    if (similarity > 0.6) {
+      return {
+        sentiment: 0.2,
+        type: "implicit_retry",
+        confidence: 0.7,
+        prompt_index: promptIndex,
+      };
+    }
+  }
+
+  // Check implicit continuation (new unrelated task = previous succeeded)
+  if (previousPrompts.length > 0 && hasRecentToolCalls) {
+    const lastPrompt = previousPrompts[previousPrompts.length - 1];
+    const similarity = computeKeywordOverlap(currentPrompt, lastPrompt);
+    if (similarity < 0.2) {
+      return {
+        sentiment: 0.7,
+        type: "implicit_continuation",
+        confidence: 0.6,
+        prompt_index: promptIndex,
+      };
+    }
+  }
+
+  return {
+    sentiment: 0.5,
+    type: "neutral",
+    confidence: 0.5,
+    prompt_index: promptIndex,
+  };
+}
+
 async function main() {
   try {
     const input = await Bun.stdin.json().catch(() => null);
@@ -152,7 +258,7 @@ async function main() {
       .sort((a, b) => b.score - a.score)
       .slice(0, MAX_PRINCIPLES);
 
-    // Store prompt and injected principle IDs in session state
+    // Store prompt, feedback, and injected principle IDs in session state
     const sessionId = input?.session_id || process.env.EVOLVER_SESSION_ID;
     if (sessionId) {
       const stateFile = Bun.file(getStateFile(sessionId));
@@ -162,6 +268,7 @@ async function main() {
           prompts: [] as string[],
           toolCalls: [] as unknown[],
           injectedPrinciples: [] as string[],
+          userFeedback: [] as UserFeedback[],
         };
         if (await stateFile.exists()) {
           const existing = await stateFile.json().catch(() => null);
@@ -169,6 +276,26 @@ async function main() {
         }
         if (!state.prompts) state.prompts = [];
         if (!state.injectedPrinciples) state.injectedPrinciples = [];
+        if (!state.userFeedback) state.userFeedback = [];
+
+        // Analyze user feedback from this prompt (about previous output)
+        const hasRecentToolCalls = (state.toolCalls?.length || 0) > 0;
+        const feedback = analyzeUserFeedback(
+          prompt,
+          state.prompts,
+          hasRecentToolCalls,
+        );
+
+        // Only store non-neutral feedback to reduce noise
+        if (feedback.type !== "neutral") {
+          state.userFeedback.push(feedback);
+          if (VERBOSE) {
+            console.error(
+              `[evolver] Feedback: ${feedback.type} (sentiment=${feedback.sentiment.toFixed(2)})`,
+            );
+          }
+        }
+
         state.prompts.push(prompt);
         // Add any new principle IDs (deduped)
         const newIds = principles.map(({ p }) => p.id);

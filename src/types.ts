@@ -39,6 +39,110 @@ export interface TraceOutcome {
 }
 
 /**
+ * User feedback signal captured from prompt analysis.
+ * Inferred from user's response to previous agent output.
+ */
+export interface UserFeedback {
+  /** Sentiment score: 0 = negative, 0.5 = neutral, 1 = positive */
+  sentiment: number;
+
+  /** How the feedback was determined */
+  type:
+    | "explicit_positive"
+    | "explicit_negative"
+    | "implicit_continuation"
+    | "implicit_retry"
+    | "neutral";
+
+  /** Confidence in the sentiment assessment (0-1) */
+  confidence: number;
+
+  /** The prompt index this feedback refers to */
+  prompt_index: number;
+
+  /** Raw patterns matched (for debugging) */
+  matched_patterns?: string[];
+}
+
+/**
+ * Context linking a principle to specific tool calls.
+ * Enables fine-grained credit assignment.
+ */
+export interface PrincipleToolContext {
+  /** The principle that was active */
+  principle_id: string;
+
+  /** Which prompt injected this principle (0-indexed) */
+  injected_at_prompt: number;
+
+  /** Tool calls that occurred after this principle was injected */
+  tool_calls_after: Array<{
+    tool: string;
+    tool_index: number;
+    succeeded: boolean;
+    /** Prompts between injection and this tool call */
+    temporal_distance: number;
+  }>;
+}
+
+/**
+ * Multi-dimensional outcome signals for richer success measurement.
+ */
+export interface OutcomeSignals {
+  /** Percentage of tools that executed without errors (0-1) */
+  tool_success_rate: number;
+
+  /** Total errors encountered */
+  error_count: number;
+
+  /** Whether any edits were made */
+  made_edits: boolean;
+
+  /** Number of Edit/Write/NotebookEdit calls */
+  edit_count: number;
+
+  /** Unique files modified */
+  files_touched: number;
+
+  /** All feedback captured during session */
+  user_feedback: UserFeedback[];
+
+  /** Average user sentiment (0-1) */
+  avg_sentiment: number;
+
+  /** Session didn't end abruptly after errors */
+  session_continued: boolean;
+
+  /** Total prompts in session */
+  prompt_count: number;
+}
+
+/**
+ * Extended trace outcome with multi-dimensional signals.
+ */
+export interface EnrichedTraceOutcome extends TraceOutcome {
+  /** Detailed signals that contributed to the outcome */
+  signals: OutcomeSignals;
+
+  /** Per-principle credit assignments */
+  principle_credits: PrincipleCredit[];
+}
+
+/**
+ * Credit assignment for a single principle.
+ */
+export interface PrincipleCredit {
+  /** The principle being credited */
+  principle_id: string;
+
+  /** Credit score (0-1), weighted contribution to success */
+  credit: number;
+
+  /** Why this credit was assigned */
+  reasoning: string;
+}
+
+/**
  * A single tool invocation within a trace.
  * Records the complete context of a tool call for replay and analysis.
  */
