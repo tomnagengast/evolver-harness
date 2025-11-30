@@ -13,11 +13,13 @@ const expandTilde = (p: string) =>
 const DB_PATH = expandTilde(
   process.env.EVOLVER_DB_PATH || join(homedir(), ".evolver", "expbase.db"),
 );
-const STATE_FILE = expandTilde(
-  process.env.EVOLVER_STATE_FILE ||
-    join(homedir(), ".evolver", "session-state.json"),
+const STATE_DIR = expandTilde(
+  process.env.EVOLVER_STATE_DIR || join(homedir(), ".evolver", "sessions"),
 );
 const VERBOSE = process.env.EVOLVER_VERBOSE === "true";
+
+/** Get session-specific state file path */
+const getStateFile = (sessionId: string) => join(STATE_DIR, `${sessionId}.json`);
 const MAX_PRINCIPLES = Number.parseInt(
   process.env.EVOLVER_PROMPT_MAX_PRINCIPLES || "5",
   10,
@@ -136,7 +138,7 @@ async function main() {
     // Store prompt and injected principle IDs in session state
     const sessionId = input?.session_id || process.env.EVOLVER_SESSION_ID;
     if (sessionId) {
-      const stateFile = Bun.file(STATE_FILE);
+      const stateFile = Bun.file(getStateFile(sessionId));
       try {
         let state = {
           sessionId,
@@ -146,7 +148,7 @@ async function main() {
         };
         if (await stateFile.exists()) {
           const existing = await stateFile.json().catch(() => null);
-          if (existing?.sessionId === sessionId) state = existing;
+          if (existing) state = existing;
         }
         if (!state.prompts) state.prompts = [];
         if (!state.injectedPrinciples) state.injectedPrinciples = [];
@@ -156,7 +158,7 @@ async function main() {
         state.injectedPrinciples = [
           ...new Set([...state.injectedPrinciples, ...newIds]),
         ];
-        await Bun.write(STATE_FILE, JSON.stringify(state, null, 2));
+        await Bun.write(getStateFile(sessionId), JSON.stringify(state, null, 2));
       } catch {
         // Ignore state write errors
       }

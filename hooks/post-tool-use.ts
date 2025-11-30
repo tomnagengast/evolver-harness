@@ -6,10 +6,17 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const STATE_FILE =
-  process.env.EVOLVER_STATE_FILE ||
-  join(homedir(), ".evolver", "session-state.json");
+/** Expand ~ to home directory in paths */
+const expandTilde = (p: string) =>
+  p.startsWith("~/") ? join(homedir(), p.slice(2)) : p;
+
+const STATE_DIR = expandTilde(
+  process.env.EVOLVER_STATE_DIR || join(homedir(), ".evolver", "sessions"),
+);
 const VERBOSE = process.env.EVOLVER_VERBOSE === "true";
+
+/** Get session-specific state file path */
+const getStateFile = (sessionId: string) => join(STATE_DIR, `${sessionId}.json`);
 
 interface SessionState {
   sessionId: string;
@@ -41,7 +48,10 @@ async function main() {
 
     const sessionId =
       input.session_id || process.env.EVOLVER_SESSION_ID || "unknown";
-    const stateFile = Bun.file(STATE_FILE);
+    if (sessionId === "unknown") process.exit(0);
+
+    const stateFilePath = getStateFile(sessionId);
+    const stateFile = Bun.file(stateFilePath);
 
     let state: SessionState = {
       sessionId,
@@ -53,7 +63,7 @@ async function main() {
       const existing = (await stateFile
         .json()
         .catch(() => null)) as SessionState | null;
-      if (existing?.sessionId === sessionId) state = existing;
+      if (existing) state = existing;
     }
 
     state.toolCalls.push({
@@ -63,7 +73,7 @@ async function main() {
       timestamp: new Date().toISOString(),
     });
 
-    await Bun.write(STATE_FILE, JSON.stringify(state, null, 2));
+    await Bun.write(stateFilePath, JSON.stringify(state, null, 2));
 
     if (VERBOSE)
       console.error(

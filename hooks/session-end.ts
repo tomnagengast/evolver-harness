@@ -15,11 +15,13 @@ const expandTilde = (p: string) =>
 const DB_PATH = expandTilde(
   process.env.EVOLVER_DB_PATH || join(homedir(), ".evolver", "expbase.db"),
 );
-const STATE_FILE = expandTilde(
-  process.env.EVOLVER_STATE_FILE ||
-    join(homedir(), ".evolver", "session-state.json"),
+const STATE_DIR = expandTilde(
+  process.env.EVOLVER_STATE_DIR || join(homedir(), ".evolver", "sessions"),
 );
 const VERBOSE = process.env.EVOLVER_VERBOSE === "true";
+
+/** Get session-specific state file path */
+const getStateFile = (sessionId: string) => join(STATE_DIR, `${sessionId}.json`);
 const AUTO_DISTILL = process.env.EVOLVER_AUTO_DISTILL !== "false";
 const DISTILL_THRESHOLD = Number.parseInt(
   process.env.EVOLVER_AUTO_DISTILL_THRESHOLD || "5",
@@ -148,15 +150,15 @@ async function main() {
     const sessionId =
       input?.session_id || process.env.EVOLVER_SESSION_ID || "unknown";
 
-    const stateFile = Bun.file(STATE_FILE);
+    const stateFilePath = getStateFile(sessionId);
+    const stateFile = Bun.file(stateFilePath);
     if (!(await stateFile.exists())) process.exit(0);
 
     const state = (await stateFile.json()) as SessionState;
-    if (state.sessionId !== sessionId) process.exit(0);
 
     // Skip trace save on clear
     if (input?.reason === "clear") {
-      await unlink(STATE_FILE).catch(() => {});
+      await unlink(stateFilePath).catch(() => {});
       process.exit(0);
     }
 
@@ -217,10 +219,15 @@ async function main() {
       storage.close();
     }
 
-    await unlink(STATE_FILE).catch(() => {});
+    await unlink(stateFilePath).catch(() => {});
   } catch (e) {
     if (VERBOSE) console.error("[evolver]", e);
-    await unlink(STATE_FILE).catch(() => {});
+    // Try to clean up state file if we have a session ID
+    const sessionId =
+      process.env.EVOLVER_SESSION_ID || "unknown";
+    if (sessionId !== "unknown") {
+      await unlink(getStateFile(sessionId)).catch(() => {});
+    }
   }
   process.exit(0);
 }

@@ -1,25 +1,34 @@
 {
   "sessionId": "4505fd2a-0c45-48ae-9b13-827c3149e230",
-  "startTime": "2025-11-30T06:48:47.028Z",
+  "prompts": [
+    "will this work when I'm running multiple sessions concurrently?"
+  ],
   "toolCalls": [
+    {
+      "tool": "Grep",
+      "input": {
+        "pattern": "session-state\\.json|STATE_FILE",
+        "glob": "hooks/*.ts",
+        "output_mode": "content",
+        "-n": true
+      },
+      "output": {
+        "mode": "content",
+        "numFiles": 0,
+        "filenames": [],
+        "content": "hooks/session-end.ts:18:const STATE_FILE = expandTilde(\nhooks/session-end.ts:19:  process.env.EVOLVER_STATE_FILE ||\nhooks/session-end.ts:20:    join(homedir(), \".evolver\", \"session-state.json\"),\nhooks/session-end.ts:151:    const stateFile = Bun.file(STATE_FILE);\nhooks/session-end.ts:159:      await unlink(STATE_FILE).catch(() => {});\nhooks/session-end.ts:220:    await unlink(STATE_FILE).catch(() => {});\nhooks/session-end.ts:223:    await unlink(STATE_FILE).catch(() => {});\nhooks/session-start.ts:16:const STATE_FILE = expandTilde(\nhooks/session-start.ts:17:  process.env.EVOLVER_STATE_FILE ||\nhooks/session-start.ts:18:    join(homedir(), \".evolver\", \"session-state.json\"),\nhooks/session-start.ts:85:      await Bun.write(STATE_FILE, JSON.stringify(state, null, 2));\nhooks/post-tool-use.ts:9:const STATE_FILE =\nhooks/post-tool-use.ts:10:  process.env.EVOLVER_STATE_FILE ||\nhooks/post-tool-use.ts:11:  join(homedir(), \".evolver\", \"session-state.json\");\nhooks/post-tool-use.ts:44:    const stateFile = Bun.file(STATE_FILE);\nhooks/post-tool-use.ts:66:    await Bun.write(STATE_FILE, JSON.stringify(state, null, 2));\nhooks/prompt-submit.ts:16:const STATE_FILE = expandTilde(\nhooks/prompt-submit.ts:17:  process.env.EVOLVER_STATE_FILE ||\nhooks/prompt-submit.ts:18:    join(homedir(), \".evolver\", \"session-state.json\"),\nhooks/prompt-submit.ts:139:      const stateFile = Bun.file(STATE_FILE);\nhooks/prompt-submit.ts:159:        await Bun.write(STATE_FILE, JSON.stringify(state, null, 2));",
+        "numLines": 21
+      },
+      "timestamp": "2025-11-30T06:51:32.496Z"
+    },
     {
       "tool": "TodoWrite",
       "input": {
         "todos": [
           {
-            "content": "Track injected principles in session state",
+            "content": "Make state file per-session using session_id",
             "status": "in_progress",
-            "activeForm": "Tracking injected principles in session state"
-          },
-          {
-            "content": "Record usage in session-end hook based on outcome",
-            "status": "pending",
-            "activeForm": "Recording usage in session-end hook"
-          },
-          {
-            "content": "Test and commit",
-            "status": "pending",
-            "activeForm": "Testing and committing"
+            "activeForm": "Making state file per-session"
           }
         ]
       },
@@ -27,23 +36,13 @@
         "oldTodos": [],
         "newTodos": [
           {
-            "content": "Track injected principles in session state",
+            "content": "Make state file per-session using session_id",
             "status": "in_progress",
-            "activeForm": "Tracking injected principles in session state"
-          },
-          {
-            "content": "Record usage in session-end hook based on outcome",
-            "status": "pending",
-            "activeForm": "Recording usage in session-end hook"
-          },
-          {
-            "content": "Test and commit",
-            "status": "pending",
-            "activeForm": "Testing and committing"
+            "activeForm": "Making state file per-session"
           }
         ]
       },
-      "timestamp": "2025-11-30T06:48:47.028Z"
+      "timestamp": "2025-11-30T06:51:37.151Z"
     },
     {
       "tool": "Read",
@@ -54,340 +53,222 @@
         "type": "text",
         "file": {
           "filePath": "/Users/tom/personal/evolver-harness/hooks/session-start.ts",
-          "content": "#!/usr/bin/env bun\n/**\n * SessionStart Hook - Retrieves principles and injects them as context\n */\n\nimport { homedir } from \"node:os\";\nimport { join } from \"node:path\";\n\n/** Expand ~ to home directory in paths */\nconst expandTilde = (p: string) =>\n  p.startsWith(\"~/\") ? join(homedir(), p.slice(2)) : p;\n\nconst DB_PATH = expandTilde(\n  process.env.EVOLVER_DB_PATH || join(homedir(), \".evolver\", \"expbase.db\"),\n);\nconst VERBOSE = process.env.EVOLVER_VERBOSE === \"true\";\nconst MAX_PRINCIPLES = Number.parseInt(\n  process.env.EVOLVER_MAX_PRINCIPLES || \"10\",\n  10,\n);\nconst MIN_SCORE = Number.parseFloat(process.env.EVOLVER_MIN_SCORE || \"0.5\");\n\ninterface Principle {\n  id: string;\n  text: string;\n  tags: string[];\n  use_count: number;\n  success_count: number;\n}\n\nasync function main() {\n  try {\n    const input = await Bun.stdin.json().catch(() => null);\n\n    // Skip on resume\n    if (input?.source === \"resume\") {\n      process.exit(0);\n    }\n\n    const sessionId = input?.session_id || crypto.randomUUID();\n\n    // Persist env vars if CLAUDE_ENV_FILE is set\n    const envFile = process.env.CLAUDE_ENV_FILE;\n    if (envFile) {\n      await Bun.write(\n        envFile,\n        `export EVOLVER_SESSION_ID=\"${sessionId}\"\\nexport EVOLVER_DB_PATH=\"${DB_PATH}\"\\n`,\n        { append: true },\n      );\n    }\n\n    // Get principles\n    const dbFile = Bun.file(DB_PATH);\n    if (!(await dbFile.exists())) {\n      console.log(`# Evolver\\n\\nNo experience base found at ${DB_PATH}`);\n      process.exit(0);\n    }\n\n    const { ExpBaseStorage } = await import(\"../src/storage/expbase.js\");\n    const storage = new ExpBaseStorage({ dbPath: DB_PATH });\n\n    const principles: Principle[] = storage\n      .getPrincipleScores()\n      .filter((s) => s.score >= MIN_SCORE)\n      .slice(0, MAX_PRINCIPLES)\n      .map((s) => storage.getPrinciple(s.id))\n      .filter(Boolean) as Principle[];\n\n    storage.close();\n\n    // Output context\n    const lines = [\n      \"# Evolver Experience Context\",\n      \"\",\n      `Session: ${sessionId}`,\n      \"\",\n    ];\n\n    if (principles.length > 0) {\n      lines.push(\"## Retrieved Principles\", \"\");\n      for (const p of principles) {\n        const score = (p.success_count + 1) / (p.use_count + 2);\n        lines.push(`**[${p.id}]** (score: ${score.toFixed(2)})`);\n        lines.push(p.text);\n        lines.push(`Tags: ${p.tags.join(\", \")}`, \"---\", \"\");\n      }\n    } else {\n      lines.push(\"No high-scoring principles found.\");\n    }\n\n    console.log(lines.join(\"\\n\"));\n  } catch (e) {\n    if (VERBOSE) console.error(\"[evolver]\", e);\n  }\n  process.exit(0);\n}\n\nmain();\n",
-          "numLines": 99,
+          "content": "#!/usr/bin/env bun\n/**\n * SessionStart Hook - Retrieves principles and injects them as context\n */\n\nimport { homedir } from \"node:os\";\nimport { join } from \"node:path\";\n\n/** Expand ~ to home directory in paths */\nconst expandTilde = (p: string) =>\n  p.startsWith(\"~/\") ? join(homedir(), p.slice(2)) : p;\n\nconst DB_PATH = expandTilde(\n  process.env.EVOLVER_DB_PATH || join(homedir(), \".evolver\", \"expbase.db\"),\n);\nconst STATE_FILE = expandTilde(\n  process.env.EVOLVER_STATE_FILE ||\n    join(homedir(), \".evolver\", \"session-state.json\"),\n);\nconst VERBOSE = process.env.EVOLVER_VERBOSE === \"true\";\nconst MAX_PRINCIPLES = Number.parseInt(\n  process.env.EVOLVER_MAX_PRINCIPLES || \"10\",\n  10,\n);\nconst MIN_SCORE = Number.parseFloat(process.env.EVOLVER_MIN_SCORE || \"0.5\");\n\ninterface Principle {\n  id: string;\n  text: string;\n  tags: string[];\n  use_count: number;\n  success_count: number;\n}\n\nasync function main() {\n  try {\n    const input = await Bun.stdin.json().catch(() => null);\n\n    // Skip on resume\n    if (input?.source === \"resume\") {\n      process.exit(0);\n    }\n\n    const sessionId = input?.session_id || crypto.randomUUID();\n\n    // Persist env vars if CLAUDE_ENV_FILE is set\n    const envFile = process.env.CLAUDE_ENV_FILE;\n    if (envFile) {\n      await Bun.write(\n        envFile,\n        `export EVOLVER_SESSION_ID=\"${sessionId}\"\\nexport EVOLVER_DB_PATH=\"${DB_PATH}\"\\n`,\n        { append: true },\n      );\n    }\n\n    // Get principles\n    const dbFile = Bun.file(DB_PATH);\n    if (!(await dbFile.exists())) {\n      console.log(`# Evolver\\n\\nNo experience base found at ${DB_PATH}`);\n      process.exit(0);\n    }\n\n    const { ExpBaseStorage } = await import(\"../src/storage/expbase.js\");\n    const storage = new ExpBaseStorage({ dbPath: DB_PATH });\n\n    const principles: Principle[] = storage\n      .getPrincipleScores()\n      .filter((s) => s.score >= MIN_SCORE)\n      .slice(0, MAX_PRINCIPLES)\n      .map((s) => storage.getPrinciple(s.id))\n      .filter(Boolean) as Principle[];\n\n    storage.close();\n\n    // Initialize session state with injected principle IDs\n    const principleIds = principles.map((p) => p.id);\n    if (principleIds.length > 0) {\n      const state = {\n        sessionId,\n        startTime: new Date().toISOString(),\n        injectedPrinciples: principleIds,\n        prompts: [] as string[],\n        toolCalls: [] as unknown[],\n      };\n      await Bun.write(STATE_FILE, JSON.stringify(state, null, 2));\n    }\n\n    // Output context\n    const lines = [\n      \"# Evolver Experience Context\",\n      \"\",\n      `Session: ${sessionId}`,\n      \"\",\n    ];\n\n    if (principles.length > 0) {\n      lines.push(\"## Retrieved Principles\", \"\");\n      for (const p of principles) {\n        const score = (p.success_count + 1) / (p.use_count + 2);\n        lines.push(`**[${p.id}]** (score: ${score.toFixed(2)})`);\n        lines.push(p.text);\n        lines.push(`Tags: ${p.tags.join(\", \")}`, \"---\", \"\");\n      }\n    } else {\n      lines.push(\"No high-scoring principles found.\");\n    }\n\n    console.log(lines.join(\"\\n\"));\n  } catch (e) {\n    if (VERBOSE) console.error(\"[evolver]\", e);\n  }\n  process.exit(0);\n}\n\nmain();\n",
+          "numLines": 116,
           "startLine": 1,
-          "totalLines": 99
+          "totalLines": 116
         }
       },
-      "timestamp": "2025-11-30T06:48:51.742Z"
+      "timestamp": "2025-11-30T06:51:40.862Z"
     },
     {
       "tool": "Edit",
       "input": {
         "file_path": "/Users/tom/personal/evolver-harness/hooks/session-start.ts",
-        "old_string": "const DB_PATH = expandTilde(\n  process.env.EVOLVER_DB_PATH || join(homedir(), \".evolver\", \"expbase.db\"),\n);\nconst VERBOSE = process.env.EVOLVER_VERBOSE === \"true\";",
-        "new_string": "const DB_PATH = expandTilde(\n  process.env.EVOLVER_DB_PATH || join(homedir(), \".evolver\", \"expbase.db\"),\n);\nconst STATE_FILE = expandTilde(\n  process.env.EVOLVER_STATE_FILE ||\n    join(homedir(), \".evolver\", \"session-state.json\"),\n);\nconst VERBOSE = process.env.EVOLVER_VERBOSE === \"true\";"
+        "old_string": "const DB_PATH = expandTilde(\n  process.env.EVOLVER_DB_PATH || join(homedir(), \".evolver\", \"expbase.db\"),\n);\nconst STATE_FILE = expandTilde(\n  process.env.EVOLVER_STATE_FILE ||\n    join(homedir(), \".evolver\", \"session-state.json\"),\n);\nconst VERBOSE = process.env.EVOLVER_VERBOSE === \"true\";",
+        "new_string": "const DB_PATH = expandTilde(\n  process.env.EVOLVER_DB_PATH || join(homedir(), \".evolver\", \"expbase.db\"),\n);\nconst STATE_DIR = expandTilde(\n  process.env.EVOLVER_STATE_DIR || join(homedir(), \".evolver\", \"sessions\"),\n);\nconst VERBOSE = process.env.EVOLVER_VERBOSE === \"true\";\n\n/** Get session-specific state file path */\nconst getStateFile = (sessionId: string) => join(STATE_DIR, `${sessionId}.json`);"
       },
       "output": {
         "filePath": "/Users/tom/personal/evolver-harness/hooks/session-start.ts",
-        "oldString": "const DB_PATH = expandTilde(\n  process.env.EVOLVER_DB_PATH || join(homedir(), \".evolver\", \"expbase.db\"),\n);\nconst VERBOSE = process.env.EVOLVER_VERBOSE === \"true\";",
-        "newString": "const DB_PATH = expandTilde(\n  process.env.EVOLVER_DB_PATH || join(homedir(), \".evolver\", \"expbase.db\"),\n);\nconst STATE_FILE = expandTilde(\n  process.env.EVOLVER_STATE_FILE ||\n    join(homedir(), \".evolver\", \"session-state.json\"),\n);\nconst VERBOSE = process.env.EVOLVER_VERBOSE === \"true\";",
-        "originalFile": "#!/usr/bin/env bun\n/**\n * SessionStart Hook - Retrieves principles and injects them as context\n */\n\nimport { homedir } from \"node:os\";\nimport { join } from \"node:path\";\n\n/** Expand ~ to home directory in paths */\nconst expandTilde = (p: string) =>\n  p.startsWith(\"~/\") ? join(homedir(), p.slice(2)) : p;\n\nconst DB_PATH = expandTilde(\n  process.env.EVOLVER_DB_PATH || join(homedir(), \".evolver\", \"expbase.db\"),\n);\nconst VERBOSE = process.env.EVOLVER_VERBOSE === \"true\";\nconst MAX_PRINCIPLES = Number.parseInt(\n  process.env.EVOLVER_MAX_PRINCIPLES || \"10\",\n  10,\n);\nconst MIN_SCORE = Number.parseFloat(process.env.EVOLVER_MIN_SCORE || \"0.5\");\n\ninterface Principle {\n  id: string;\n  text: string;\n  tags: string[];\n  use_count: number;\n  success_count: number;\n}\n\nasync function main() {\n  try {\n    const input = await Bun.stdin.json().catch(() => null);\n\n    // Skip on resume\n    if (input?.source === \"resume\") {\n      process.exit(0);\n    }\n\n    const sessionId = input?.session_id || crypto.randomUUID();\n\n    // Persist env vars if CLAUDE_ENV_FILE is set\n    const envFile = process.env.CLAUDE_ENV_FILE;\n    if (envFile) {\n      await Bun.write(\n        envFile,\n        `export EVOLVER_SESSION_ID=\"${sessionId}\"\\nexport EVOLVER_DB_PATH=\"${DB_PATH}\"\\n`,\n        { append: true },\n      );\n    }\n\n    // Get principles\n    const dbFile = Bun.file(DB_PATH);\n    if (!(await dbFile.exists())) {\n      console.log(`# Evolver\\n\\nNo experience base found at ${DB_PATH}`);\n      process.exit(0);\n    }\n\n    const { ExpBaseStorage } = await import(\"../src/storage/expbase.js\");\n    const storage = new ExpBaseStorage({ dbPath: DB_PATH });\n\n    const principles: Principle[] = storage\n      .getPrincipleScores()\n      .filter((s) => s.score >= MIN_SCORE)\n      .slice(0, MAX_PRINCIPLES)\n      .map((s) => storage.getPrinciple(s.id))\n      .filter(Boolean) as Principle[];\n\n    storage.close();\n\n    // Output context\n    const lines = [\n      \"# Evolver Experience Context\",\n      \"\",\n      `Session: ${sessionId}`,\n      \"\",\n    ];\n\n    if (principles.length > 0) {\n      lines.push(\"## Retrieved Principles\", \"\");\n      for (const p of principles) {\n        const score = (p.success_count + 1) / (p.use_count + 2);\n        lines.push(`**[${p.id}]** (score: ${score.toFixed(2)})`);\n        lines.push(p.text);\n        lines.push(`Tags: ${p.tags.join(\", \")}`, \"---\", \"\");\n      }\n    } else {\n      lines.push(\"No high-scoring principles found.\");\n    }\n\n    console.log(lines.join(\"\\n\"));\n  } catch (e) {\n    if (VERBOSE) console.error(\"[evolver]\", e);\n  }\n  process.exit(0);\n}\n\nmain();\n",
+        "oldString": "const DB_PATH = expandTilde(\n  process.env.EVOLVER_DB_PATH || join(homedir(), \".evolver\", \"expbase.db\"),\n);\nconst STATE_FILE = expandTilde(\n  process.env.EVOLVER_STATE_FILE ||\n    join(homedir(), \".evolver\", \"session-state.json\"),\n);\nconst VERBOSE = process.env.EVOLVER_VERBOSE === \"true\";",
+        "newString": "const DB_PATH = expandTilde(\n  process.env.EVOLVER_DB_PATH || join(homedir(), \".evolver\", \"expbase.db\"),\n);\nconst STATE_DIR = expandTilde(\n  process.env.EVOLVER_STATE_DIR || join(homedir(), \".evolver\", \"sessions\"),\n);\nconst VERBOSE = process.env.EVOLVER_VERBOSE === \"true\";\n\n/** Get session-specific state file path */\nconst getStateFile = (sessionId: string) => join(STATE_DIR, `${sessionId}.json`);",
+        "originalFile": "#!/usr/bin/env bun\n/**\n * SessionStart Hook - Retrieves principles and injects them as context\n */\n\nimport { homedir } from \"node:os\";\nimport { join } from \"node:path\";\n\n/** Expand ~ to home directory in paths */\nconst expandTilde = (p: string) =>\n  p.startsWith(\"~/\") ? join(homedir(), p.slice(2)) : p;\n\nconst DB_PATH = expandTilde(\n  process.env.EVOLVER_DB_PATH || join(homedir(), \".evolver\", \"expbase.db\"),\n);\nconst STATE_FILE = expandTilde(\n  process.env.EVOLVER_STATE_FILE ||\n    join(homedir(), \".evolver\", \"session-state.json\"),\n);\nconst VERBOSE = process.env.EVOLVER_VERBOSE === \"true\";\nconst MAX_PRINCIPLES = Number.parseInt(\n  process.env.EVOLVER_MAX_PRINCIPLES || \"10\",\n  10,\n);\nconst MIN_SCORE = Number.parseFloat(process.env.EVOLVER_MIN_SCORE || \"0.5\");\n\ninterface Principle {\n  id: string;\n  text: string;\n  tags: string[];\n  use_count: number;\n  success_count: number;\n}\n\nasync function main() {\n  try {\n    const input = await Bun.stdin.json().catch(() => null);\n\n    // Skip on resume\n    if (input?.source === \"resume\") {\n      process.exit(0);\n    }\n\n    const sessionId = input?.session_id || crypto.randomUUID();\n\n    // Persist env vars if CLAUDE_ENV_FILE is set\n    const envFile = process.env.CLAUDE_ENV_FILE;\n    if (envFile) {\n      await Bun.write(\n        envFile,\n        `export EVOLVER_SESSION_ID=\"${sessionId}\"\\nexport EVOLVER_DB_PATH=\"${DB_PATH}\"\\n`,\n        { append: true },\n      );\n    }\n\n    // Get principles\n    const dbFile = Bun.file(DB_PATH);\n    if (!(await dbFile.exists())) {\n      console.log(`# Evolver\\n\\nNo experience base found at ${DB_PATH}`);\n      process.exit(0);\n    }\n\n    const { ExpBaseStorage } = await import(\"../src/storage/expbase.js\");\n    const storage = new ExpBaseStorage({ dbPath: DB_PATH });\n\n    const principles: Principle[] = storage\n      .getPrincipleScores()\n      .filter((s) => s.score >= MIN_SCORE)\n      .slice(0, MAX_PRINCIPLES)\n      .map((s) => storage.getPrinciple(s.id))\n      .filter(Boolean) as Principle[];\n\n    storage.close();\n\n    // Initialize session state with injected principle IDs\n    const principleIds = principles.map((p) => p.id);\n    if (principleIds.length > 0) {\n      const state = {\n        sessionId,\n        startTime: new Date().toISOString(),\n        injectedPrinciples: principleIds,\n        prompts: [] as string[],\n        toolCalls: [] as unknown[],\n      };\n      await Bun.write(STATE_FILE, JSON.stringify(state, null, 2));\n    }\n\n    // Output context\n    const lines = [\n      \"# Evolver Experience Context\",\n      \"\",\n      `Session: ${sessionId}`,\n      \"\",\n    ];\n\n    if (principles.length > 0) {\n      lines.push(\"## Retrieved Principles\", \"\");\n      for (const p of principles) {\n        const score = (p.success_count + 1) / (p.use_count + 2);\n        lines.push(`**[${p.id}]** (score: ${score.toFixed(2)})`);\n        lines.push(p.text);\n        lines.push(`Tags: ${p.tags.join(\", \")}`, \"---\", \"\");\n      }\n    } else {\n      lines.push(\"No high-scoring principles found.\");\n    }\n\n    console.log(lines.join(\"\\n\"));\n  } catch (e) {\n    if (VERBOSE) console.error(\"[evolver]\", e);\n  }\n  process.exit(0);\n}\n\nmain();\n",
         "structuredPatch": [
           {
             "oldStart": 13,
-            "oldLines": 6,
+            "oldLines": 11,
             "newStart": 13,
-            "newLines": 10,
+            "newLines": 13,
             "lines": [
               " const DB_PATH = expandTilde(",
               "   process.env.EVOLVER_DB_PATH || join(homedir(), \".evolver\", \"expbase.db\"),",
               " );",
-              "+const STATE_FILE = expandTilde(",
-              "+  process.env.EVOLVER_STATE_FILE ||",
-              "+    join(homedir(), \".evolver\", \"session-state.json\"),",
-              "+);",
+              "-const STATE_FILE = expandTilde(",
+              "-  process.env.EVOLVER_STATE_FILE ||",
+              "-    join(homedir(), \".evolver\", \"session-state.json\"),",
+              "+const STATE_DIR = expandTilde(",
+              "+  process.env.EVOLVER_STATE_DIR || join(homedir(), \".evolver\", \"sessions\"),",
+              " );",
               " const VERBOSE = process.env.EVOLVER_VERBOSE === \"true\";",
+              "+",
+              "+/** Get session-specific state file path */",
+              "+const getStateFile = (sessionId: string) => join(STATE_DIR, `${sessionId}.json`);",
               " const MAX_PRINCIPLES = Number.parseInt(",
-              "   process.env.EVOLVER_MAX_PRINCIPLES || \"10\","
+              "   process.env.EVOLVER_MAX_PRINCIPLES || \"10\",",
+              "   10,"
             ]
           }
         ],
         "userModified": false,
         "replaceAll": false
       },
-      "timestamp": "2025-11-30T06:48:57.404Z"
+      "timestamp": "2025-11-30T06:51:47.886Z"
     },
     {
       "tool": "Edit",
       "input": {
         "file_path": "/Users/tom/personal/evolver-harness/hooks/session-start.ts",
-        "old_string": "    storage.close();\n\n    // Output context",
-        "new_string": "    storage.close();\n\n    // Initialize session state with injected principle IDs\n    const principleIds = principles.map((p) => p.id);\n    if (principleIds.length > 0) {\n      const state = {\n        sessionId,\n        startTime: new Date().toISOString(),\n        injectedPrinciples: principleIds,\n        prompts: [] as string[],\n        toolCalls: [] as unknown[],\n      };\n      await Bun.write(STATE_FILE, JSON.stringify(state, null, 2));\n    }\n\n    // Output context"
+        "old_string": "    // Initialize session state with injected principle IDs\n    const principleIds = principles.map((p) => p.id);\n    if (principleIds.length > 0) {\n      const state = {\n        sessionId,\n        startTime: new Date().toISOString(),\n        injectedPrinciples: principleIds,\n        prompts: [] as string[],\n        toolCalls: [] as unknown[],\n      };\n      await Bun.write(STATE_FILE, JSON.stringify(state, null, 2));\n    }",
+        "new_string": "    // Initialize session state with injected principle IDs\n    const principleIds = principles.map((p) => p.id);\n    const state = {\n      sessionId,\n      startTime: new Date().toISOString(),\n      injectedPrinciples: principleIds,\n      prompts: [] as string[],\n      toolCalls: [] as unknown[],\n    };\n    // Ensure state directory exists\n    const { mkdir } = await import(\"node:fs/promises\");\n    await mkdir(STATE_DIR, { recursive: true });\n    await Bun.write(getStateFile(sessionId), JSON.stringify(state, null, 2));"
       },
       "output": {
-        "filePath": "/Users/tom/personal/evolver-harness/hooks/session-start.ts",
-        "oldString": "    storage.close();\n\n    // Output context",
-        "newString": "    storage.close();\n\n    // Initialize session state with injected principle IDs\n    const principleIds = principles.map((p) => p.id);\n    if (principleIds.length > 0) {\n      const state = {\n        sessionId,\n        startTime: new Date().toISOString(),\n        injectedPrinciples: principleIds,\n        prompts: [] as string[],\n        toolCalls: [] as unknown[],\n      };\n      await Bun.write(STATE_FILE, JSON.stringify(state, null, 2));\n    }\n\n    // Output context",
-        "originalFile": "#!/usr/bin/env bun\n/**\n * SessionStart Hook - Retrieves principles and injects them as context\n */\n\nimport { homedir } from \"node:os\";\nimport { join } from \"node:path\";\n\n/** Expand ~ to home directory in paths */\nconst expandTilde = (p: string) =>\n  p.startsWith(\"~/\") ? join(homedir(), p.slice(2)) : p;\n\nconst DB_PATH = expandTilde(\n  process.env.EVOLVER_DB_PATH || join(homedir(), \".evolver\", \"expbase.db\"),\n);\nconst STATE_FILE = expandTilde(\n  process.env.EVOLVER_STATE_FILE ||\n    join(homedir(), \".evolver\", \"session-state.json\"),\n);\nconst VERBOSE = process.env.EVOLVER_VERBOSE === \"true\";\nconst MAX_PRINCIPLES = Number.parseInt(\n  process.env.EVOLVER_MAX_PRINCIPLES || \"10\",\n  10,\n);\nconst MIN_SCORE = Number.parseFloat(process.env.EVOLVER_MIN_SCORE || \"0.5\");\n\ninterface Principle {\n  id: string;\n  text: string;\n  tags: string[];\n  use_count: number;\n  success_count: number;\n}\n\nasync function main() {\n  try {\n    const input = await Bun.stdin.json().catch(() => null);\n\n    // Skip on resume\n    if (input?.source === \"resume\") {\n      process.exit(0);\n    }\n\n    const sessionId = input?.session_id || crypto.randomUUID();\n\n    // Persist env vars if CLAUDE_ENV_FILE is set\n    const envFile = process.env.CLAUDE_ENV_FILE;\n    if (envFile) {\n      await Bun.write(\n        envFile,\n        `export EVOLVER_SESSION_ID=\"${sessionId}\"\\nexport EVOLVER_DB_PATH=\"${DB_PATH}\"\\n`,\n        { append: true },\n      );\n    }\n\n    // Get principles\n    const dbFile = Bun.file(DB_PATH);\n    if (!(await dbFile.exists())) {\n      console.log(`# Evolver\\n\\nNo experience base found at ${DB_PATH}`);\n      process.exit(0);\n    }\n\n    const { ExpBaseStorage } = await import(\"../src/storage/expbase.js\");\n    const storage = new ExpBaseStorage({ dbPath: DB_PATH });\n\n    const principles: Principle[] = storage\n      .getPrincipleScores()\n      .filter((s) => s.score >= MIN_SCORE)\n      .slice(0, MAX_PRINCIPLES)\n      .map((s) => storage.getPrinciple(s.id))\n      .filter(Boolean) as Principle[];\n\n    storage.close();\n\n    // Output context\n    const lines = [\n      \"# Evolver Experience Context\",\n      \"\",\n      `Session: ${sessionId}`,\n      \"\",\n    ];\n\n    if (principles.length > 0) {\n      lines.push(\"## Retrieved Principles\", \"\");\n      for (const p of principles) {\n        const score = (p.success_count + 1) / (p.use_count + 2);\n        lines.push(`**[${p.id}]** (score: ${score.toFixed(2)})`);\n        lines.push(p.text);\n        lines.push(`Tags: ${p.tags.join(\", \")}`, \"---\", \"\");\n      }\n    } else {\n      lines.push(\"No high-scoring principles found.\");\n    }\n\n    console.log(lines.join(\"\\n\"));\n  } catch (e) {\n    if (VERBOSE) console.error(\"[evolver]\", e);\n  }\n  process.exit(0);\n}\n\nmain();\n",
-        "structuredPatch": [
-          {
-            "oldStart": 72,
-            "oldLines": 6,
-            "newStart": 72,
-            "newLines": 19,
-            "lines": [
-              " ",
-              "     storage.close();",
-              " ",
-              "+    // Initialize session state with injected principle IDs",
-              "+    const principleIds = principles.map((p) => p.id);",
-              "+    if (principleIds.length > 0) {",
-              "+      const state = {",
-              "+        sessionId,",
-              "+        startTime: new Date().toISOString(),",
-              "+        injectedPrinciples: principleIds,",
-              "+        prompts: [] as string[],",
-              "+        toolCalls: [] as unknown[],",
-              "+      };",
-              "+      await Bun.write(STATE_FILE, JSON.stringify(state, null, 2));",
-              "+    }",
-              "+",
-              "     // Output context",
-              "     const lines = [",
-              "       \"# Evolver Experience Context\","
-            ]
-          }
-        ],
-        "userModified": false,
-        "replaceAll": false
+        "_truncated": true,
+        "preview": "{\"filePath\":\"/Users/tom/personal/evolver-harness/hooks/session-start.ts\",\"oldString\":\"    // Initialize session state with injected principle IDs\\n    const principleIds = principles.map((p) => p.id);\\n    if (principleIds.length > 0) {\\n      const state = {\\n        sessionId,\\n        startTime: new Date().toISOString(),\\n        injectedPrinciples: principleIds,\\n        prompts: [] as string[],\\n        toolCalls: [] as unknown[],\\n      };\\n      await Bun.write(STATE_FILE, JSON.stringify("
       },
-      "timestamp": "2025-11-30T06:49:03.362Z"
+      "timestamp": "2025-11-30T06:51:53.583Z"
+    },
+    {
+      "tool": "Edit",
+      "input": {
+        "file_path": "/Users/tom/personal/evolver-harness/hooks/prompt-submit.ts",
+        "old_string": "const DB_PATH = expandTilde(\n  process.env.EVOLVER_DB_PATH || join(homedir(), \".evolver\", \"expbase.db\"),\n);\nconst STATE_FILE = expandTilde(\n  process.env.EVOLVER_STATE_FILE ||\n    join(homedir(), \".evolver\", \"session-state.json\"),\n);\nconst VERBOSE = process.env.EVOLVER_VERBOSE === \"true\";",
+        "new_string": "const DB_PATH = expandTilde(\n  process.env.EVOLVER_DB_PATH || join(homedir(), \".evolver\", \"expbase.db\"),\n);\nconst STATE_DIR = expandTilde(\n  process.env.EVOLVER_STATE_DIR || join(homedir(), \".evolver\", \"sessions\"),\n);\nconst VERBOSE = process.env.EVOLVER_VERBOSE === \"true\";\n\n/** Get session-specific state file path */\nconst getStateFile = (sessionId: string) => join(STATE_DIR, `${sessionId}.json`);"
+      },
+      "output": {
+        "_truncated": true,
+        "preview": "{\"filePath\":\"/Users/tom/personal/evolver-harness/hooks/prompt-submit.ts\",\"oldString\":\"const DB_PATH = expandTilde(\\n  process.env.EVOLVER_DB_PATH || join(homedir(), \\\".evolver\\\", \\\"expbase.db\\\"),\\n);\\nconst STATE_FILE = expandTilde(\\n  process.env.EVOLVER_STATE_FILE ||\\n    join(homedir(), \\\".evolver\\\", \\\"session-state.json\\\"),\\n);\\nconst VERBOSE = process.env.EVOLVER_VERBOSE === \\\"true\\\";\",\"newString\":\"const DB_PATH = expandTilde(\\n  process.env.EVOLVER_DB_PATH || join(homedir(), \\\".evolver\\\", "
+      },
+      "timestamp": "2025-11-30T06:51:59.108Z"
     },
     {
       "tool": "Read",
       "input": {
         "file_path": "/Users/tom/personal/evolver-harness/hooks/prompt-submit.ts",
-        "offset": 105,
-        "limit": 70
+        "offset": 135,
+        "limit": 35
       },
       "output": {
         "type": "text",
         "file": {
           "filePath": "/Users/tom/personal/evolver-harness/hooks/prompt-submit.ts",
-          "content": "      ...new Set(\n        prompt\n          .toLowerCase()\n          .replace(/[^a-z0-9\\s]/g, \" \")\n          .split(/\\s+/)\n          .filter((w: string) => w.length > 2 && !STOP_WORDS.has(w)),\n      ),\n    ];\n\n    if (keywords.length === 0) process.exit(0);\n\n    // Store prompt in session state for task extraction\n    const sessionId = input?.session_id || process.env.EVOLVER_SESSION_ID;\n    if (sessionId) {\n      const stateFile = Bun.file(STATE_FILE);\n      try {\n        let state = { sessionId, prompts: [] as string[], toolCalls: [] };\n        if (await stateFile.exists()) {\n          const existing = await stateFile.json().catch(() => null);\n          if (existing?.sessionId === sessionId) state = existing;\n        }\n        if (!state.prompts) state.prompts = [];\n        state.prompts.push(prompt);\n        await Bun.write(STATE_FILE, JSON.stringify(state, null, 2));\n      } catch {\n        // Ignore state write errors\n      }\n    }\n\n    const dbFile = Bun.file(DB_PATH);\n    if (!(await dbFile.exists())) process.exit(0);\n\n    const { ExpBaseStorage } = await import(\"../src/storage/expbase.js\");\n    const storage = new ExpBaseStorage({ dbPath: DB_PATH });\n\n    const results = storage.searchPrinciples({\n      tags: keywords,\n      limit: MAX_PRINCIPLES * 2,\n      min_principle_score: MIN_SCORE,\n      search_mode: \"principles\",\n    });\n\n    storage.close();\n\n    const principles = results\n      .map((p) => ({ p, score: (p.success_count + 1) / (p.use_count + 2) }))\n      .sort((a, b) => b.score - a.score)\n      .slice(0, MAX_PRINCIPLES);\n\n    if (principles.length === 0) process.exit(0);\n\n    const context = principles\n      .map(\n        ({ p, score }) =>\n          `- **${p.tags[0] || \"general\"}** (${score.toFixed(2)}): ${p.text}`,\n      )\n      .join(\"\\n\");\n\n    console.log(\n      JSON.stringify({\n        hookSpecificOutput: {\n          hookEventName: \"UserPromptSubmit\",\n          additionalContext: `\\n**Relevant principles:**\\n${context}\\n`,\n        },\n      }),\n    );\n  } catch (e) {\n    if (VERBOSE) console.error(\"[evolver]\", e);\n  }\n  process.exit(0);",
-          "numLines": 70,
-          "startLine": 105,
-          "totalLines": 178
+          "content": "      .sort((a, b) => b.score - a.score)\n      .slice(0, MAX_PRINCIPLES);\n\n    // Store prompt and injected principle IDs in session state\n    const sessionId = input?.session_id || process.env.EVOLVER_SESSION_ID;\n    if (sessionId) {\n      const stateFile = Bun.file(STATE_FILE);\n      try {\n        let state = {\n          sessionId,\n          prompts: [] as string[],\n          toolCalls: [] as unknown[],\n          injectedPrinciples: [] as string[],\n        };\n        if (await stateFile.exists()) {\n          const existing = await stateFile.json().catch(() => null);\n          if (existing?.sessionId === sessionId) state = existing;\n        }\n        if (!state.prompts) state.prompts = [];\n        if (!state.injectedPrinciples) state.injectedPrinciples = [];\n        state.prompts.push(prompt);\n        // Add any new principle IDs (deduped)\n        const newIds = principles.map(({ p }) => p.id);\n        state.injectedPrinciples = [\n          ...new Set([...state.injectedPrinciples, ...newIds]),\n        ];\n        await Bun.write(STATE_FILE, JSON.stringify(state, null, 2));\n      } catch {\n        // Ignore state write errors\n      }\n    }\n\n    if (principles.length === 0) process.exit(0);\n\n    const context = principles",
+          "numLines": 35,
+          "startLine": 135,
+          "totalLines": 191
         }
       },
-      "timestamp": "2025-11-30T06:49:08.110Z"
+      "timestamp": "2025-11-30T06:52:02.717Z"
     },
     {
       "tool": "Edit",
       "input": {
         "file_path": "/Users/tom/personal/evolver-harness/hooks/prompt-submit.ts",
-        "old_string": "    // Store prompt in session state for task extraction\n    const sessionId = input?.session_id || process.env.EVOLVER_SESSION_ID;\n    if (sessionId) {\n      const stateFile = Bun.file(STATE_FILE);\n      try {\n        let state = { sessionId, prompts: [] as string[], toolCalls: [] };\n        if (await stateFile.exists()) {\n          const existing = await stateFile.json().catch(() => null);\n          if (existing?.sessionId === sessionId) state = existing;\n        }\n        if (!state.prompts) state.prompts = [];\n        state.prompts.push(prompt);\n        await Bun.write(STATE_FILE, JSON.stringify(state, null, 2));\n      } catch {\n        // Ignore state write errors\n      }\n    }\n\n    const dbFile = Bun.file(DB_PATH);\n    if (!(await dbFile.exists())) process.exit(0);\n\n    const { ExpBaseStorage } = await import(\"../src/storage/expbase.js\");\n    const storage = new ExpBaseStorage({ dbPath: DB_PATH });\n\n    const results = storage.searchPrinciples({\n      tags: keywords,\n      limit: MAX_PRINCIPLES * 2,\n      min_principle_score: MIN_SCORE,\n      search_mode: \"principles\",\n    });\n\n    storage.close();\n\n    const principles = results\n      .map((p) => ({ p, score: (p.success_count + 1) / (p.use_count + 2) }))\n      .sort((a, b) => b.score - a.score)\n      .slice(0, MAX_PRINCIPLES);\n\n    if (principles.length === 0) process.exit(0);\n\n    const context = principles\n      .map(\n        ({ p, score }) =>\n          `- **${p.tags[0] || \"general\"}** (${score.toFixed(2)}): ${p.text}`,\n      )\n      .join(\"\\n\");\n\n    console.log(\n      JSON.stringify({\n        hookSpecificOutput: {\n          hookEventName: \"UserPromptSubmit\",\n          additionalContext: `\\n**Relevant principles:**\\n${context}\\n`,\n        },\n      }),\n    );",
-        "new_string": "    const dbFile = Bun.file(DB_PATH);\n    if (!(await dbFile.exists())) process.exit(0);\n\n    const { ExpBaseStorage } = await import(\"../src/storage/expbase.js\");\n    const storage = new ExpBaseStorage({ dbPath: DB_PATH });\n\n    const results = storage.searchPrinciples({\n      tags: keywords,\n      limit: MAX_PRINCIPLES * 2,\n      min_principle_score: MIN_SCORE,\n      search_mode: \"principles\",\n    });\n\n    storage.close();\n\n    const principles = results\n      .map((p) => ({ p, score: (p.success_count + 1) / (p.use_count + 2) }))\n      .sort((a, b) => b.score - a.score)\n      .slice(0, MAX_PRINCIPLES);\n\n    // Store prompt and injected principle IDs in session state\n    const sessionId = input?.session_id || process.env.EVOLVER_SESSION_ID;\n    if (sessionId) {\n      const stateFile = Bun.file(STATE_FILE);\n      try {\n        let state = {\n          sessionId,\n          prompts: [] as string[],\n          toolCalls: [] as unknown[],\n          injectedPrinciples: [] as string[],\n        };\n        if (await stateFile.exists()) {\n          const existing = await stateFile.json().catch(() => null);\n          if (existing?.sessionId === sessionId) state = existing;\n        }\n        if (!state.prompts) state.prompts = [];\n        if (!state.injectedPrinciples) state.injectedPrinciples = [];\n        state.prompts.push(prompt);\n        // Add any new principle IDs (deduped)\n        const newIds = principles.map(({ p }) => p.id);\n        state.injectedPrinciples = [\n          ...new Set([...state.injectedPrinciples, ...newIds]),\n        ];\n        await Bun.write(STATE_FILE, JSON.stringify(state, null, 2));\n      } catch {\n        // Ignore state write errors\n      }\n    }\n\n    if (principles.length === 0) process.exit(0);\n\n    const context = principles\n      .map(\n        ({ p, score }) =>\n          `- **${p.tags[0] || \"general\"}** (${score.toFixed(2)}): ${p.text}`,\n      )\n      .join(\"\\n\");\n\n    console.log(\n      JSON.stringify({\n        hookSpecificOutput: {\n          hookEventName: \"UserPromptSubmit\",\n          additionalContext: `\\n**Relevant principles:**\\n${context}\\n`,\n        },\n      }),\n    );"
+        "old_string": "    // Store prompt and injected principle IDs in session state\n    const sessionId = input?.session_id || process.env.EVOLVER_SESSION_ID;\n    if (sessionId) {\n      const stateFile = Bun.file(STATE_FILE);\n      try {\n        let state = {\n          sessionId,\n          prompts: [] as string[],\n          toolCalls: [] as unknown[],\n          injectedPrinciples: [] as string[],\n        };\n        if (await stateFile.exists()) {\n          const existing = await stateFile.json().catch(() => null);\n          if (existing?.sessionId === sessionId) state = existing;\n        }\n        if (!state.prompts) state.prompts = [];\n        if (!state.injectedPrinciples) state.injectedPrinciples = [];\n        state.prompts.push(prompt);\n        // Add any new principle IDs (deduped)\n        const newIds = principles.map(({ p }) => p.id);\n        state.injectedPrinciples = [\n          ...new Set([...state.injectedPrinciples, ...newIds]),\n        ];\n        await Bun.write(STATE_FILE, JSON.stringify(state, null, 2));\n      } catch {\n        // Ignore state write errors\n      }\n    }",
+        "new_string": "    // Store prompt and injected principle IDs in session state\n    const sessionId = input?.session_id || process.env.EVOLVER_SESSION_ID;\n    if (sessionId) {\n      const stateFile = Bun.file(getStateFile(sessionId));\n      try {\n        let state = {\n          sessionId,\n          prompts: [] as string[],\n          toolCalls: [] as unknown[],\n          injectedPrinciples: [] as string[],\n        };\n        if (await stateFile.exists()) {\n          const existing = await stateFile.json().catch(() => null);\n          if (existing) state = existing;\n        }\n        if (!state.prompts) state.prompts = [];\n        if (!state.injectedPrinciples) state.injectedPrinciples = [];\n        state.prompts.push(prompt);\n        // Add any new principle IDs (deduped)\n        const newIds = principles.map(({ p }) => p.id);\n        state.injectedPrinciples = [\n          ...new Set([...state.injectedPrinciples, ...newIds]),\n        ];\n        await Bun.write(getStateFile(sessionId), JSON.stringify(state, null, 2));\n      } catch {\n        // Ignore state write errors\n      }\n    }"
       },
       "output": {
         "_truncated": true,
-        "preview": "{\"filePath\":\"/Users/tom/personal/evolver-harness/hooks/prompt-submit.ts\",\"oldString\":\"    // Store prompt in session state for task extraction\\n    const sessionId = input?.session_id || process.env.EVOLVER_SESSION_ID;\\n    if (sessionId) {\\n      const stateFile = Bun.file(STATE_FILE);\\n      try {\\n        let state = { sessionId, prompts: [] as string[], toolCalls: [] };\\n        if (await stateFile.exists()) {\\n          const existing = await stateFile.json().catch(() => null);\\n          i"
+        "preview": "{\"filePath\":\"/Users/tom/personal/evolver-harness/hooks/prompt-submit.ts\",\"oldString\":\"    // Store prompt and injected principle IDs in session state\\n    const sessionId = input?.session_id || process.env.EVOLVER_SESSION_ID;\\n    if (sessionId) {\\n      const stateFile = Bun.file(STATE_FILE);\\n      try {\\n        let state = {\\n          sessionId,\\n          prompts: [] as string[],\\n          toolCalls: [] as unknown[],\\n          injectedPrinciples: [] as string[],\\n        };\\n        if ("
       },
-      "timestamp": "2025-11-30T06:49:21.053Z"
-    },
-    {
-      "tool": "TodoWrite",
-      "input": {
-        "todos": [
-          {
-            "content": "Track injected principles in session state",
-            "status": "completed",
-            "activeForm": "Tracking injected principles in session state"
-          },
-          {
-            "content": "Record usage in session-end hook based on outcome",
-            "status": "in_progress",
-            "activeForm": "Recording usage in session-end hook"
-          },
-          {
-            "content": "Test and commit",
-            "status": "pending",
-            "activeForm": "Testing and committing"
-          }
-        ]
-      },
-      "output": {
-        "oldTodos": [
-          {
-            "content": "Track injected principles in session state",
-            "status": "in_progress",
-            "activeForm": "Tracking injected principles in session state"
-          },
-          {
-            "content": "Record usage in session-end hook based on outcome",
-            "status": "pending",
-            "activeForm": "Recording usage in session-end hook"
-          },
-          {
-            "content": "Test and commit",
-            "status": "pending",
-            "activeForm": "Testing and committing"
-          }
-        ],
-        "newTodos": [
-          {
-            "content": "Track injected principles in session state",
-            "status": "completed",
-            "activeForm": "Tracking injected principles in session state"
-          },
-          {
-            "content": "Record usage in session-end hook based on outcome",
-            "status": "in_progress",
-            "activeForm": "Recording usage in session-end hook"
-          },
-          {
-            "content": "Test and commit",
-            "status": "pending",
-            "activeForm": "Testing and committing"
-          }
-        ]
-      },
-      "timestamp": "2025-11-30T06:49:25.687Z"
-    },
-    {
-      "tool": "Read",
-      "input": {
-        "file_path": "/Users/tom/personal/evolver-harness/hooks/session-end.ts",
-        "offset": 24,
-        "limit": 20
-      },
-      "output": {
-        "type": "text",
-        "file": {
-          "filePath": "/Users/tom/personal/evolver-harness/hooks/session-end.ts",
-          "content": "const DISTILL_THRESHOLD = Number.parseInt(\n  process.env.EVOLVER_AUTO_DISTILL_THRESHOLD || \"5\",\n  10,\n);\n\ninterface SessionState {\n  sessionId: string;\n  startTime: string;\n  prompts?: string[];\n  toolCalls: Array<{\n    tool: string;\n    input: unknown;\n    output: unknown;\n    timestamp: string;\n  }>;\n}\n\nfunction extractTaskSummary(prompts: string[]): string {\n  if (!prompts || prompts.length === 0) return \"Claude Code session\";\n",
-          "numLines": 20,
-          "startLine": 24,
-          "totalLines": 211
-        }
-      },
-      "timestamp": "2025-11-30T06:49:29.313Z"
+      "timestamp": "2025-11-30T06:52:10.598Z"
     },
     {
       "tool": "Edit",
       "input": {
         "file_path": "/Users/tom/personal/evolver-harness/hooks/session-end.ts",
-        "old_string": "interface SessionState {\n  sessionId: string;\n  startTime: string;\n  prompts?: string[];\n  toolCalls: Array<{\n    tool: string;\n    input: unknown;\n    output: unknown;\n    timestamp: string;\n  }>;\n}",
-        "new_string": "interface SessionState {\n  sessionId: string;\n  startTime: string;\n  prompts?: string[];\n  injectedPrinciples?: string[];\n  toolCalls: Array<{\n    tool: string;\n    input: unknown;\n    output: unknown;\n    timestamp: string;\n  }>;\n}"
+        "old_string": "const DB_PATH = expandTilde(\n  process.env.EVOLVER_DB_PATH || join(homedir(), \".evolver\", \"expbase.db\"),\n);\nconst STATE_FILE = expandTilde(\n  process.env.EVOLVER_STATE_FILE ||\n    join(homedir(), \".evolver\", \"session-state.json\"),\n);\nconst VERBOSE = process.env.EVOLVER_VERBOSE === \"true\";",
+        "new_string": "const DB_PATH = expandTilde(\n  process.env.EVOLVER_DB_PATH || join(homedir(), \".evolver\", \"expbase.db\"),\n);\nconst STATE_DIR = expandTilde(\n  process.env.EVOLVER_STATE_DIR || join(homedir(), \".evolver\", \"sessions\"),\n);\nconst VERBOSE = process.env.EVOLVER_VERBOSE === \"true\";\n\n/** Get session-specific state file path */\nconst getStateFile = (sessionId: string) => join(STATE_DIR, `${sessionId}.json`);"
       },
       "output": {
         "_truncated": true,
-        "preview": "{\"filePath\":\"/Users/tom/personal/evolver-harness/hooks/session-end.ts\",\"oldString\":\"interface SessionState {\\n  sessionId: string;\\n  startTime: string;\\n  prompts?: string[];\\n  toolCalls: Array<{\\n    tool: string;\\n    input: unknown;\\n    output: unknown;\\n    timestamp: string;\\n  }>;\\n}\",\"newString\":\"interface SessionState {\\n  sessionId: string;\\n  startTime: string;\\n  prompts?: string[];\\n  injectedPrinciples?: string[];\\n  toolCalls: Array<{\\n    tool: string;\\n    input: unknown;\\n   "
+        "preview": "{\"filePath\":\"/Users/tom/personal/evolver-harness/hooks/session-end.ts\",\"oldString\":\"const DB_PATH = expandTilde(\\n  process.env.EVOLVER_DB_PATH || join(homedir(), \\\".evolver\\\", \\\"expbase.db\\\"),\\n);\\nconst STATE_FILE = expandTilde(\\n  process.env.EVOLVER_STATE_FILE ||\\n    join(homedir(), \\\".evolver\\\", \\\"session-state.json\\\"),\\n);\\nconst VERBOSE = process.env.EVOLVER_VERBOSE === \\\"true\\\";\",\"newString\":\"const DB_PATH = expandTilde(\\n  process.env.EVOLVER_DB_PATH || join(homedir(), \\\".evolver\\\", \\\""
       },
-      "timestamp": "2025-11-30T06:49:33.774Z"
+      "timestamp": "2025-11-30T06:52:15.938Z"
     },
     {
       "tool": "Read",
       "input": {
         "file_path": "/Users/tom/personal/evolver-harness/hooks/session-end.ts",
-        "offset": 180,
-        "limit": 30
+        "offset": 145,
+        "limit": 40
       },
       "output": {
         "type": "text",
         "file": {
           "filePath": "/Users/tom/personal/evolver-harness/hooks/session-end.ts",
-          "content": "        tool_calls: state.toolCalls,\n        intermediate_thoughts: state.prompts || [],\n        final_answer: `Session ended with ${outcome.status}`,\n        outcome,\n        duration_ms: durationMs,\n        model_used: process.env.CLAUDE_MODEL || \"unknown\",\n        session_id: sessionId,\n        agent_id: process.env.CLAUDE_AGENT_ID,\n      });\n\n      if (VERBOSE) console.error(`[evolver] Saved trace: ${trace.id}`);\n\n      // Auto-distill if enabled and threshold reached\n      if (AUTO_DISTILL) {\n        const undistilledCount = countUndistilledTraces(storage);\n        if (undistilledCount >= DISTILL_THRESHOLD) {\n          spawnDistillation(undistilledCount);\n        }\n      }\n\n      storage.close();\n    }\n\n    await unlink(STATE_FILE).catch(() => {});\n  } catch (e) {\n    if (VERBOSE) console.error(\"[evolver]\", e);\n    await unlink(STATE_FILE).catch(() => {});\n  }\n  process.exit(0);\n}",
-          "numLines": 30,
-          "startLine": 180,
-          "totalLines": 212
+          "content": "}\n\nasync function main() {\n  try {\n    const input = await Bun.stdin.json().catch(() => null);\n    const sessionId =\n      input?.session_id || process.env.EVOLVER_SESSION_ID || \"unknown\";\n\n    const stateFile = Bun.file(STATE_FILE);\n    if (!(await stateFile.exists())) process.exit(0);\n\n    const state = (await stateFile.json()) as SessionState;\n    if (state.sessionId !== sessionId) process.exit(0);\n\n    // Skip trace save on clear\n    if (input?.reason === \"clear\") {\n      await unlink(STATE_FILE).catch(() => {});\n      process.exit(0);\n    }\n\n    const dbFile = Bun.file(DB_PATH);\n    if (await dbFile.exists()) {\n      const { ExpBaseStorage } = await import(\"../src/storage/expbase.js\");\n      const storage = new ExpBaseStorage({ dbPath: DB_PATH });\n      const outcome = inferOutcome(state.toolCalls);\n\n      const durationMs =\n        state.toolCalls.length > 0\n          ? Date.now() - new Date(state.startTime).getTime()\n          : 0;\n\n      const trace = storage.addTrace({\n        task_summary: extractTaskSummary(state.prompts || []),\n        problem_description: extractProblemDescription(\n          state.prompts || [],\n          state.toolCalls,\n        ),\n        tool_calls: state.toolCalls,\n        intermediate_thoughts: state.prompts || [],\n        final_answer: `Session ended with ${outcome.status}`,",
+          "numLines": 40,
+          "startLine": 145,
+          "totalLines": 231
         }
       },
-      "timestamp": "2025-11-30T06:49:38.124Z"
+      "timestamp": "2025-11-30T06:52:19.662Z"
     },
     {
       "tool": "Edit",
       "input": {
         "file_path": "/Users/tom/personal/evolver-harness/hooks/session-end.ts",
-        "old_string": "      if (VERBOSE) console.error(`[evolver] Saved trace: ${trace.id}`);\n\n      // Auto-distill if enabled and threshold reached",
-        "new_string": "      if (VERBOSE) console.error(`[evolver] Saved trace: ${trace.id}`);\n\n      // Record usage for all injected principles\n      const wasSuccessful = outcome.status === \"success\";\n      if (state.injectedPrinciples && state.injectedPrinciples.length > 0) {\n        for (const principleId of state.injectedPrinciples) {\n          try {\n            storage.recordUsage(principleId, trace.id, wasSuccessful);\n          } catch {\n            // Principle may have been deleted, ignore\n          }\n        }\n        if (VERBOSE) {\n          console.error(\n            `[evolver] Recorded usage for ${state.injectedPrinciples.length} principles (success: ${wasSuccessful})`,\n          );\n        }\n      }\n\n      // Auto-distill if enabled and threshold reached"
+        "old_string": "async function main() {\n  try {\n    const input = await Bun.stdin.json().catch(() => null);\n    const sessionId =\n      input?.session_id || process.env.EVOLVER_SESSION_ID || \"unknown\";\n\n    const stateFile = Bun.file(STATE_FILE);\n    if (!(await stateFile.exists())) process.exit(0);\n\n    const state = (await stateFile.json()) as SessionState;\n    if (state.sessionId !== sessionId) process.exit(0);\n\n    // Skip trace save on clear\n    if (input?.reason === \"clear\") {\n      await unlink(STATE_FILE).catch(() => {});\n      process.exit(0);\n    }",
+        "new_string": "async function main() {\n  try {\n    const input = await Bun.stdin.json().catch(() => null);\n    const sessionId =\n      input?.session_id || process.env.EVOLVER_SESSION_ID || \"unknown\";\n\n    const stateFilePath = getStateFile(sessionId);\n    const stateFile = Bun.file(stateFilePath);\n    if (!(await stateFile.exists())) process.exit(0);\n\n    const state = (await stateFile.json()) as SessionState;\n\n    // Skip trace save on clear\n    if (input?.reason === \"clear\") {\n      await unlink(stateFilePath).catch(() => {});\n      process.exit(0);\n    }"
       },
       "output": {
         "_truncated": true,
-        "preview": "{\"filePath\":\"/Users/tom/personal/evolver-harness/hooks/session-end.ts\",\"oldString\":\"      if (VERBOSE) console.error(`[evolver] Saved trace: ${trace.id}`);\\n\\n      // Auto-distill if enabled and threshold reached\",\"newString\":\"      if (VERBOSE) console.error(`[evolver] Saved trace: ${trace.id}`);\\n\\n      // Record usage for all injected principles\\n      const wasSuccessful = outcome.status === \\\"success\\\";\\n      if (state.injectedPrinciples && state.injectedPrinciples.length > 0) {\\n       "
+        "preview": "{\"filePath\":\"/Users/tom/personal/evolver-harness/hooks/session-end.ts\",\"oldString\":\"async function main() {\\n  try {\\n    const input = await Bun.stdin.json().catch(() => null);\\n    const sessionId =\\n      input?.session_id || process.env.EVOLVER_SESSION_ID || \\\"unknown\\\";\\n\\n    const stateFile = Bun.file(STATE_FILE);\\n    if (!(await stateFile.exists())) process.exit(0);\\n\\n    const state = (await stateFile.json()) as SessionState;\\n    if (state.sessionId !== sessionId) process.exit(0);\\n\\"
       },
-      "timestamp": "2025-11-30T06:49:44.411Z"
+      "timestamp": "2025-11-30T06:52:25.613Z"
     },
     {
-      "tool": "TodoWrite",
+      "tool": "Read",
       "input": {
-        "todos": [
-          {
-            "content": "Track injected principles in session state",
-            "status": "completed",
-            "activeForm": "Tracking injected principles in session state"
-          },
-          {
-            "content": "Record usage in session-end hook based on outcome",
-            "status": "completed",
-            "activeForm": "Recording usage in session-end hook"
-          },
-          {
-            "content": "Test and commit",
-            "status": "in_progress",
-            "activeForm": "Testing and committing"
-          }
-        ]
+        "file_path": "/Users/tom/personal/evolver-harness/hooks/session-end.ts",
+        "offset": 210,
+        "limit": 25
       },
       "output": {
-        "oldTodos": [
-          {
-            "content": "Track injected principles in session state",
-            "status": "completed",
-            "activeForm": "Tracking injected principles in session state"
-          },
-          {
-            "content": "Record usage in session-end hook based on outcome",
-            "status": "in_progress",
-            "activeForm": "Recording usage in session-end hook"
-          },
-          {
-            "content": "Test and commit",
-            "status": "pending",
-            "activeForm": "Testing and committing"
-          }
-        ],
-        "newTodos": [
-          {
-            "content": "Track injected principles in session state",
-            "status": "completed",
-            "activeForm": "Tracking injected principles in session state"
-          },
-          {
-            "content": "Record usage in session-end hook based on outcome",
-            "status": "completed",
-            "activeForm": "Recording usage in session-end hook"
-          },
-          {
-            "content": "Test and commit",
-            "status": "in_progress",
-            "activeForm": "Testing and committing"
-          }
-        ]
+        "type": "text",
+        "file": {
+          "filePath": "/Users/tom/personal/evolver-harness/hooks/session-end.ts",
+          "content": "\n      // Auto-distill if enabled and threshold reached\n      if (AUTO_DISTILL) {\n        const undistilledCount = countUndistilledTraces(storage);\n        if (undistilledCount >= DISTILL_THRESHOLD) {\n          spawnDistillation(undistilledCount);\n        }\n      }\n\n      storage.close();\n    }\n\n    await unlink(STATE_FILE).catch(() => {});\n  } catch (e) {\n    if (VERBOSE) console.error(\"[evolver]\", e);\n    await unlink(STATE_FILE).catch(() => {});\n  }\n  process.exit(0);\n}\n\nmain();\n",
+          "numLines": 22,
+          "startLine": 210,
+          "totalLines": 231
+        }
       },
-      "timestamp": "2025-11-30T06:49:48.270Z"
+      "timestamp": "2025-11-30T06:52:29.746Z"
     },
     {
-      "tool": "Bash",
+      "tool": "Edit",
       "input": {
-        "command": "bun run typecheck",
-        "description": "Run typecheck only"
+        "file_path": "/Users/tom/personal/evolver-harness/hooks/session-end.ts",
+        "old_string": "      storage.close();\n    }\n\n    await unlink(STATE_FILE).catch(() => {});\n  } catch (e) {\n    if (VERBOSE) console.error(\"[evolver]\", e);\n    await unlink(STATE_FILE).catch(() => {});\n  }\n  process.exit(0);\n}",
+        "new_string": "      storage.close();\n    }\n\n    await unlink(stateFilePath).catch(() => {});\n  } catch (e) {\n    if (VERBOSE) console.error(\"[evolver]\", e);\n    await unlink(stateFilePath).catch(() => {});\n  }\n  process.exit(0);\n}"
       },
       "output": {
-        "stdout": "$ tsc --noEmit",
-        "stderr": "",
-        "interrupted": false,
-        "isImage": false
+        "_truncated": true,
+        "preview": "{\"filePath\":\"/Users/tom/personal/evolver-harness/hooks/session-end.ts\",\"oldString\":\"      storage.close();\\n    }\\n\\n    await unlink(STATE_FILE).catch(() => {});\\n  } catch (e) {\\n    if (VERBOSE) console.error(\\\"[evolver]\\\", e);\\n    await unlink(STATE_FILE).catch(() => {});\\n  }\\n  process.exit(0);\\n}\",\"newString\":\"      storage.close();\\n    }\\n\\n    await unlink(stateFilePath).catch(() => {});\\n  } catch (e) {\\n    if (VERBOSE) console.error(\\\"[evolver]\\\", e);\\n    await unlink(stateFilePat"
       },
-      "timestamp": "2025-11-30T06:49:59.396Z"
+      "timestamp": "2025-11-30T06:52:34.847Z"
     },
     {
-      "tool": "Bash",
+      "tool": "Edit",
       "input": {
-        "command": "bun test",
-        "description": "Run tests outside sandbox",
-        "dangerouslyDisableSandbox": true
+        "file_path": "/Users/tom/personal/evolver-harness/hooks/session-end.ts",
+        "old_string": "    await unlink(stateFilePath).catch(() => {});\n  } catch (e) {\n    if (VERBOSE) console.error(\"[evolver]\", e);\n    await unlink(stateFilePath).catch(() => {});\n  }\n  process.exit(0);\n}",
+        "new_string": "    await unlink(stateFilePath).catch(() => {});\n  } catch (e) {\n    if (VERBOSE) console.error(\"[evolver]\", e);\n    // Try to clean up state file if we have a session ID\n    const sessionId =\n      process.env.EVOLVER_SESSION_ID || \"unknown\";\n    if (sessionId !== \"unknown\") {\n      await unlink(getStateFile(sessionId)).catch(() => {});\n    }\n  }\n  process.exit(0);\n}"
       },
       "output": {
-        "stdout": "bun test v1.3.3 (274e01c7)\n\n 34 pass\n 0 fail\n 20 expect() calls\nRan 34 tests across 3 files. [152.00ms]",
-        "stderr": "",
-        "interrupted": false,
-        "isImage": false,
-        "dangerouslyDisableSandbox": true
+        "_truncated": true,
+        "preview": "{\"filePath\":\"/Users/tom/personal/evolver-harness/hooks/session-end.ts\",\"oldString\":\"    await unlink(stateFilePath).catch(() => {});\\n  } catch (e) {\\n    if (VERBOSE) console.error(\\\"[evolver]\\\", e);\\n    await unlink(stateFilePath).catch(() => {});\\n  }\\n  process.exit(0);\\n}\",\"newString\":\"    await unlink(stateFilePath).catch(() => {});\\n  } catch (e) {\\n    if (VERBOSE) console.error(\\\"[evolver]\\\", e);\\n    // Try to clean up state file if we have a session ID\\n    const sessionId =\\n      p"
       },
-      "timestamp": "2025-11-30T06:50:02.889Z"
+      "timestamp": "2025-11-30T06:52:41.965Z"
+    },
+    {
+      "tool": "Read",
+      "input": {
+        "file_path": "/Users/tom/personal/evolver-harness/hooks/post-tool-use.ts"
+      },
+      "output": {
+        "type": "text",
+        "file": {
+          "filePath": "/Users/tom/personal/evolver-harness/hooks/post-tool-use.ts",
+          "content": "#!/usr/bin/env bun\n/**\n * PostToolUse Hook - Logs tool calls to session state\n */\n\nimport { homedir } from \"node:os\";\nimport { join } from \"node:path\";\n\nconst STATE_FILE =\n  process.env.EVOLVER_STATE_FILE ||\n  join(homedir(), \".evolver\", \"session-state.json\");\nconst VERBOSE = process.env.EVOLVER_VERBOSE === \"true\";\n\ninterface SessionState {\n  sessionId: string;\n  startTime: string;\n  toolCalls: Array<{\n    tool: string;\n    input: unknown;\n    output: unknown;\n    timestamp: string;\n  }>;\n}\n\nfunction truncate(value: unknown, maxLen = 5000): unknown {\n  if (typeof value === \"string\" && value.length > maxLen) {\n    return `${value.slice(0, maxLen)}... [truncated]`;\n  }\n  if (typeof value === \"object\" && value !== null) {\n    const str = JSON.stringify(value);\n    if (str.length > maxLen)\n      return { _truncated: true, preview: str.slice(0, 500) };\n  }\n  return value;\n}\n\nasync function main() {\n  try {\n    const input = await Bun.stdin.json().catch(() => null);\n    if (!input?.tool_name) process.exit(0);\n\n    const sessionId =\n      input.session_id || process.env.EVOLVER_SESSION_ID || \"unknown\";\n    const stateFile = Bun.file(STATE_FILE);\n\n    let state: SessionState = {\n      sessionId,\n      startTime: new Date().toISOString(),\n      toolCalls: [],\n    };\n\n    if (await stateFile.exists()) {\n      const existing = (await stateFile\n        .json()\n        .catch(() => null)) as SessionState | null;\n      if (existing?.sessionId === sessionId) state = existing;\n    }\n\n    state.toolCalls.push({\n      tool: input.tool_name,\n      input: input.tool_input || {},\n      output: truncate(input.tool_response),\n      timestamp: new Date().toISOString(),\n    });\n\n    await Bun.write(STATE_FILE, JSON.stringify(state, null, 2));\n\n    if (VERBOSE)\n      console.error(\n        `[evolver] Logged: ${input.tool_name} (${state.toolCalls.length} total)`,\n      );\n  } catch (e) {\n    if (VERBOSE) console.error(\"[evolver]\", e);\n  }\n  process.exit(0);\n}\n\nmain();\n",
+          "numLines": 79,
+          "startLine": 1,
+          "totalLines": 79
+        }
+      },
+      "timestamp": "2025-11-30T06:52:45.657Z"
     }
-  ]
+  ],
+  "injectedPrinciples": []
 }

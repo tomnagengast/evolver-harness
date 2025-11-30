@@ -158,7 +158,7 @@ Principles are stored as structured knowledge:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `EVOLVER_DB_PATH` | `~/.evolver/expbase.db` | Path to SQLite database |
-| `EVOLVER_STATE_FILE` | `~/.evolver/session-state.json` | Session state for hooks |
+| `EVOLVER_STATE_DIR` | `~/.evolver/sessions` | Directory for session state files |
 | `EVOLVER_MAX_PRINCIPLES` | `10` | Max principles to inject at session start |
 | `EVOLVER_MIN_SCORE` | `0.5` | Min Bayesian score for principle injection |
 | `EVOLVER_PROMPT_MAX_PRINCIPLES` | `5` | Max principles per prompt (UserPromptSubmit) |

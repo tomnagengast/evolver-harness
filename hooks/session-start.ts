@@ -13,11 +13,13 @@ const expandTilde = (p: string) =>
 const DB_PATH = expandTilde(
   process.env.EVOLVER_DB_PATH || join(homedir(), ".evolver", "expbase.db"),
 );
-const STATE_FILE = expandTilde(
-  process.env.EVOLVER_STATE_FILE ||
-    join(homedir(), ".evolver", "session-state.json"),
+const STATE_DIR = expandTilde(
+  process.env.EVOLVER_STATE_DIR || join(homedir(), ".evolver", "sessions"),
 );
 const VERBOSE = process.env.EVOLVER_VERBOSE === "true";
+
+/** Get session-specific state file path */
+const getStateFile = (sessionId: string) => join(STATE_DIR, `${sessionId}.json`);
 const MAX_PRINCIPLES = Number.parseInt(
   process.env.EVOLVER_MAX_PRINCIPLES || "10",
   10,
@@ -74,16 +76,17 @@ async function main() {
 
     // Initialize session state with injected principle IDs
     const principleIds = principles.map((p) => p.id);
-    if (principleIds.length > 0) {
-      const state = {
-        sessionId,
-        startTime: new Date().toISOString(),
-        injectedPrinciples: principleIds,
-        prompts: [] as string[],
-        toolCalls: [] as unknown[],
-      };
-      await Bun.write(STATE_FILE, JSON.stringify(state, null, 2));
-    }
+    const state = {
+      sessionId,
+      startTime: new Date().toISOString(),
+      injectedPrinciples: principleIds,
+      prompts: [] as string[],
+      toolCalls: [] as unknown[],
+    };
+    // Ensure state directory exists
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(STATE_DIR, { recursive: true });
+    await Bun.write(getStateFile(sessionId), JSON.stringify(state, null, 2));
 
     // Output context
     const lines = [
