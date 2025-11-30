@@ -164,6 +164,8 @@ Principles are stored as structured knowledge:
 | `EVOLVER_PROMPT_MAX_PRINCIPLES` | `5` | Max principles per prompt (UserPromptSubmit) |
 | `EVOLVER_PROMPT_MIN_SCORE` | `0.5` | Min score for prompt retrieval |
 | `EVOLVER_VERBOSE` | `false` | Enable verbose logging |
+| `EVOLVER_AUTO_DISTILL` | `true` | Enable automatic background distillation |
+| `EVOLVER_AUTO_DISTILL_THRESHOLD` | `5` | Undistilled trace count to trigger distillation |
 | `ANTHROPIC_API_KEY` | - | Required for distillation |
 | `OPENAI_API_KEY` | - | Required for embeddings |
 
@@ -175,8 +177,9 @@ Principles are stored as structured knowledge:
 2. Hooks inject relevant principles automatically
 3. Work on your tasks as usual
 4. Session ends, trace is saved to ExpBase
+5. After 5 traces accumulate, background distillation extracts new principles
 
-### Periodic Maintenance
+### Manual Maintenance (optional)
 
 1. Run distillation: `bun run distill 10`
 2. Run deduplication: `bun run distill:dedupe`

@@ -20,6 +20,11 @@ const STATE_FILE = expandTilde(
     join(homedir(), ".evolver", "session-state.json"),
 );
 const VERBOSE = process.env.EVOLVER_VERBOSE === "true";
+const AUTO_DISTILL = process.env.EVOLVER_AUTO_DISTILL !== "false";
+const DISTILL_THRESHOLD = Number.parseInt(
+  process.env.EVOLVER_AUTO_DISTILL_THRESHOLD || "5",
+  10,
+);
 
 interface SessionState {
   sessionId: string;
@@ -95,6 +100,47 @@ function inferOutcome(toolCalls: SessionState["toolCalls"]) {
   return { status: "partial" as const, score: 0.5 };
 }
 
+/**
+ * Count undistilled traces (traces not referenced in any principle's examples)
+ */
+function countUndistilledTraces(storage: {
+  getAllTraces: () => Array<{ id: string }>;
+  getAllPrinciples: () => Array<{ examples: Array<{ trace_id: string }> }>;
+}): number {
+  const traces = storage.getAllTraces();
+  const principles = storage.getAllPrinciples();
+
+  const referencedTraceIds = new Set<string>();
+  for (const principle of principles) {
+    for (const example of principle.examples) {
+      referencedTraceIds.add(example.trace_id);
+    }
+  }
+
+  return traces.filter((t) => !referencedTraceIds.has(t.id)).length;
+}
+
+/**
+ * Spawn background distillation process (fire-and-forget)
+ */
+function spawnDistillation(count: number): void {
+  const distillerPath = join(import.meta.dir, "../src/distiller/cli.ts");
+
+  Bun.spawn(["bun", distillerPath, "distill", String(count)], {
+    env: {
+      ...process.env,
+      EVOLVER_DB_PATH: DB_PATH,
+    },
+    stdout: VERBOSE ? "inherit" : "ignore",
+    stderr: VERBOSE ? "inherit" : "ignore",
+  });
+
+  if (VERBOSE)
+    console.error(
+      `[evolver] Spawned background distillation for ${count} traces`,
+    );
+}
+
 async function main() {
   try {
     const input = await Bun.stdin.json().catch(() => null);
@@ -140,8 +186,17 @@ async function main() {
         agent_id: process.env.CLAUDE_AGENT_ID,
       });
 
-      storage.close();
       if (VERBOSE) console.error(`[evolver] Saved trace: ${trace.id}`);
+
+      // Auto-distill if enabled and threshold reached
+      if (AUTO_DISTILL) {
+        const undistilledCount = countUndistilledTraces(storage);
+        if (undistilledCount >= DISTILL_THRESHOLD) {
+          spawnDistillation(undistilledCount);
+        }
+      }
+
+      storage.close();
     }
 
     await unlink(STATE_FILE).catch(() => {});
