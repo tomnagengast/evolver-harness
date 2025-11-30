@@ -60,11 +60,11 @@ function parseCliArgs(): {
   const command = positionals[0] || "help";
   const args = positionals.slice(1);
 
-  // Determine database path
+  // Determine database path (use EVOLVER_DB_PATH to match hooks)
   const dbPath =
     values.db ||
-    process.env.EXPBASE_DB_PATH ||
-    resolve(process.cwd(), "expbase.db");
+    process.env.EVOLVER_DB_PATH ||
+    resolve(process.env.HOME || "", ".evolver", "expbase.db");
 
   const config: CLIConfig = {
     dbPath,
@@ -112,7 +112,7 @@ COMMANDS:
   help                     Show this help message
 
 OPTIONS:
-  -d, --db <path>                  Database path (default: ./expbase.db)
+  -d, --db <path>                  Database path (default: ~/.evolver/expbase.db)
   -v, --verbose                    Enable verbose logging
   --openai-key <key>               OpenAI API key for embeddings (or set OPENAI_API_KEY)
   -m, --model <model>              Claude model to use (default: claude-sonnet-4-5-20250929)
@@ -142,7 +142,7 @@ EXAMPLES:
   distiller stats
 
 ENVIRONMENT VARIABLES:
-  EXPBASE_DB_PATH      Path to database file
+  EVOLVER_DB_PATH      Path to database file (default: ~/.evolver/expbase.db)
   ANTHROPIC_API_KEY    Anthropic API key for Claude
   OPENAI_API_KEY       OpenAI API key for embeddings
 `);
