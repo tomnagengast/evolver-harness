@@ -25,6 +25,21 @@ const expandTilde = (p: string) =>
 const DB_PATH = expandTilde(
   process.env.EVOLVER_DB_PATH || join(homedir(), ".evolver", "expbase.db"),
 );
+const STATE_DIR = expandTilde(
+  process.env.EVOLVER_STATE_DIR || join(homedir(), ".evolver", "sessions"),
+);
+
+/** Get session-specific state file path */
+const getStateFile = (sessionId: string) =>
+  join(STATE_DIR, `${sessionId}.json`);
+
+interface SessionState {
+  sessionId: string;
+  startTime?: string;
+  injectedPrinciples: string[];
+  exploratoryPrinciples?: string[];
+  contextTags?: string[];
+}
 
 const server = new Server(
   { name: "evolver", version: "1.0.0" },
@@ -131,6 +146,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object" as const,
         properties: {},
+      },
+    },
+    {
+      name: "list_loaded_principles",
+      description:
+        "List all principles that were loaded into the current session at startup. Shows which principles are currently active and available for guidance.",
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          session_id: {
+            type: "string",
+            description:
+              "The session ID to look up. If not provided, uses EVOLVER_SESSION_ID env var.",
+          },
+        },
       },
     },
   ],
@@ -294,6 +324,110 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           {
             type: "text" as const,
             text: `Error listing tags: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+
+  if (name === "list_loaded_principles") {
+    try {
+      const sessionId =
+        (args?.session_id as string) || process.env.EVOLVER_SESSION_ID;
+
+      if (!sessionId) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "No session ID provided and EVOLVER_SESSION_ID not set. Cannot determine which principles are loaded.",
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const stateFile = Bun.file(getStateFile(sessionId));
+      if (!(await stateFile.exists())) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `No session state found for session "${sessionId}". The session may not have been started with Evolver hooks.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const state: SessionState = await stateFile.json();
+      const principleIds = state.injectedPrinciples || [];
+
+      if (principleIds.length === 0) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `# Loaded Principles\n\nNo principles were loaded for session ${sessionId}.`,
+            },
+          ],
+        };
+      }
+
+      // Fetch full principle details from DB
+      const storage = new ExpBaseStorage({ dbPath: DB_PATH });
+      const exploratoryIds = new Set(state.exploratoryPrinciples || []);
+
+      const principles = principleIds
+        .map((id) => {
+          const p = storage.getPrinciple(id);
+          if (!p) return null;
+          return {
+            id: p.id,
+            text: p.text,
+            tags: p.tags,
+            score: calculatePrincipleScore(p),
+            use_count: p.use_count,
+            success_rate:
+              p.use_count > 0 ? p.success_count / p.use_count : null,
+            is_exploratory: exploratoryIds.has(p.id),
+          };
+        })
+        .filter(Boolean) as Array<{
+        id: string;
+        text: string;
+        tags: string[];
+        score: number;
+        use_count: number;
+        success_rate: number | null;
+        is_exploratory: boolean;
+      }>;
+
+      storage.close();
+
+      const lines = [
+        "# Loaded Principles",
+        "",
+        `Session: ${sessionId}`,
+        `Total: ${principles.length} principles`,
+        "",
+      ];
+
+      if (state.contextTags && state.contextTags.length > 0) {
+        lines.push(`Context tags: ${state.contextTags.join(", ")}`, "");
+      }
+
+      lines.push("---\n");
+      lines.push(formatPrinciples(principles));
+
+      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Error listing loaded principles: ${error instanceof Error ? error.message : String(error)}`,
           },
         ],
         isError: true,
