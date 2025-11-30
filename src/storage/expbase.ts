@@ -672,6 +672,44 @@ export class ExpBaseStorage {
   }
 
   /**
+   * Get principles for exploration (untested or under-tested)
+   * Uses Thompson Sampling-inspired selection to balance exploitation vs exploration
+   */
+  getExploratoryPrinciples(count: number): Principle[] {
+    try {
+      const allPrinciples = this.getAllPrinciples();
+
+      // Candidates: principles with < 5 uses OR created in last 7 days
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const candidates = allPrinciples.filter(
+        (p) =>
+          p.use_count < 5 || new Date(p.created_at).getTime() > sevenDaysAgo,
+      );
+
+      if (candidates.length === 0) return [];
+
+      // Thompson Sampling: sample from Beta(success+1, failure+1)
+      const scored = candidates.map((p) => ({
+        principle: p,
+        sample: betaSample(
+          p.success_count + 1,
+          p.use_count - p.success_count + 1,
+        ),
+      }));
+
+      // Return top N by sampled score
+      return scored
+        .sort((a, b) => b.sample - a.sample)
+        .slice(0, count)
+        .map((s) => s.principle);
+    } catch (error) {
+      throw new Error(
+        `Failed to get exploratory principles: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /**
    * Prune principles with scores below the threshold
    */
   pruneLowScorePrinciples(threshold: number, minUsageCount = 10): string[] {
@@ -912,4 +950,46 @@ export class ExpBaseStorage {
       context: row.context ? JSON.parse(row.context as string) : undefined,
     };
   }
+}
+
+/**
+ * Sample from a Beta distribution using Gamma sampling
+ * Beta(a,b) = Gamma(a,1) / (Gamma(a,1) + Gamma(b,1))
+ */
+function betaSample(alpha: number, beta: number): number {
+  const x = gammaSample(alpha);
+  const y = gammaSample(beta);
+  return x / (x + y);
+}
+
+/**
+ * Sample from a Gamma distribution using Marsaglia and Tsang's method
+ */
+function gammaSample(shape: number): number {
+  if (shape < 1) {
+    return gammaSample(shape + 1) * Math.random() ** (1 / shape);
+  }
+  const d = shape - 1 / 3;
+  const c = 1 / Math.sqrt(9 * d);
+  while (true) {
+    let x: number;
+    let v: number;
+    do {
+      x = normalSample();
+      v = 1 + c * x;
+    } while (v <= 0);
+    v = v * v * v;
+    const u = Math.random();
+    if (u < 1 - 0.0331 * (x * x) * (x * x)) return d * v;
+    if (Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) return d * v;
+  }
+}
+
+/**
+ * Sample from a standard normal distribution using Box-Muller transform
+ */
+function normalSample(): number {
+  const u1 = Math.random();
+  const u2 = Math.random();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
 }
