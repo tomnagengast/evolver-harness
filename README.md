@@ -49,14 +49,17 @@ This harness extends Claude Code with:
 # 1. Install dependencies
 bun install
 
-# 2. Run Claude Code from this directory
+# 2. Copy environment config
+cp .env.example .env
+
+# 3. Run Claude Code from this directory
 claude
 
 # Hooks automatically:
 # - Inject top-scoring principles at session start
 # - Add task-specific principles per prompt
 # - Log all tool calls for traces
-# - Save traces at session end
+# - Save traces after each response (Stop) and at session end
 ```
 
 The hooks are configured in `.claude/settings.json` and run automatically.
@@ -79,10 +82,11 @@ Native Claude Code hooks that handle the full session lifecycle:
 
 | Hook | File | Purpose |
 |------|------|---------|
-| SessionStart | `session-start-v2.ts` | Retrieves top principles, outputs as context |
+| SessionStart | `session-start.ts` | Retrieves top principles, outputs as context |
 | UserPromptSubmit | `prompt-submit.ts` | Task-aware retrieval from prompt keywords |
 | PostToolUse | `post-tool-use.ts` | Logs tool calls to session state |
-| SessionEnd | `session-end-v2.ts` | Saves complete trace to ExpBase |
+| Stop | `session-end.ts` | Saves trace after each response |
+| SessionEnd | `session-end.ts` | Saves trace when session terminates |
 
 ### Storage Layer (`src/storage/expbase.ts`)
 
