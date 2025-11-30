@@ -40,7 +40,7 @@ interface SessionState {
   startTime: string;
   toolCalls: Array<{
     tool: string;
-    input: unknown;
+    input: Record<string, unknown>;
     output: unknown;
     timestamp: string;
   }>;

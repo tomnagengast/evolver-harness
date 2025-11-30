@@ -191,7 +191,7 @@ describe("Hooks Integration", () => {
         startTime: string;
         toolCalls: Array<{
           tool: string;
-          input: unknown;
+          input: Record<string, unknown>;
           output: unknown;
           timestamp: string;
         }>;
@@ -228,7 +228,7 @@ describe("Hooks Integration", () => {
     it("infers outcome from tool calls", () => {
       type ToolCall = {
         tool: string;
-        input: unknown;
+        input: Record<string, unknown>;
         output: unknown;
         timestamp: string;
       };
